@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id        Int      @id @default(autoincrement())
+  name      String
+  continent String
+  events    Event[]
+  athletes  Athlete[]
+}
+
+model Promoter {
+  id     Int     @id @default(autoincrement())
+  name   String
+  events Event[]
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  name        String
+  date        DateTime
+  sport       String
+  countryId   Int
+  promoterId  Int
+
+  country     Country  @relation(fields: [countryId], references: [id])
+  promoter    Promoter @relation(fields: [promoterId], references: [id])
+  athletes    AthleteEvent[]
+}
+
+model Athlete {
+  id        Int      @id @default(autoincrement())
+  name      String
+  discipline String
+  countryId Int
+
+  country   Country      @relation(fields: [countryId], references: [id])
+  packages  Package[]
+  events    AthleteEvent[]
+}
+
+model AthleteEvent {
+  id        Int     @id @default(autoincrement())
+  athlete   Athlete @relation(fields: [athleteId], references: [id])
+  athleteId Int
+  event     Event   @relation(fields: [eventId], references: [id])
+  eventId   Int
+
+  @@unique([athleteId, eventId])
+}
+
+model Package {
+  id        Int     @id @default(autoincrement())
+  price     Float
+  includes  String
+  athleteId Int
+
+  athlete   Athlete @relation(fields: [athleteId], references: [id])
+}

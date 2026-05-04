@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BJJ Championships - Search</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <h1>Fight House</h1>
+      </header>
+
+      <!-- Navigation Tabs -->
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="championships">
+          Campeonatos
+        </button>
+        <button class="tab-btn" data-tab="athletes">
+          Atletas
+        </button>
+        <button class="tab-btn" data-tab="events">
+          Eventos
+        </button>
+      </nav>
+
+      <!-- CAMPEONATOS TAB -->
+      <section id="championships" class="tab-content active">
+        <div class="section-header">
+          <h2>Buscar Campeonatos</h2>
+        </div>
+
+        <!-- FILTROS -->
+        <div class="filters-container">
+          <!-- Categoría Filters -->
+          <div class="filter-group category-row">
+            <h3>Categoría</h3>
+            <label class="filter-checkbox">
+              <input type="checkbox" id="adultsFilter" />
+              Adultos
+            </label>
+            <label class="filter-checkbox">
+              <input type="checkbox" id="kidsFilter" />
+              Niños
+            </label>
+          </div>
+
+          <div class="filters-row">
+            <div class="filter-column">
+              <h3>Países</h3>
+              <div class="dropdown" id="countriesDropdown">
+                <button type="button" class="dropbtn" id="countriesDropdownButton" aria-expanded="false" aria-controls="countries-dropdown">
+                  Países
+                </button>
+                <div id="countries-dropdown" class="dropdown-content" role="listbox" aria-label="Países">
+                  <div class="dropdown-search">
+                    <input id="country-search" type="text" placeholder="Buscar país..." class="search-input" aria-label="Buscar país" />
+                  </div>
+                  <div class="dropdown-list" id="countriesList">
+                    <div class="loading">Cargando países...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="filter-column">
+              <h3>Federaciones</h3>
+              <div class="dropdown" id="federationsDropdown">
+                <button type="button" class="dropbtn" id="federationsDropdownButton" aria-expanded="false" aria-controls="federations-dropdown">
+                  Federaciones
+                </button>
+                <div id="federations-dropdown" class="dropdown-content" role="listbox" aria-label="Federaciones">
+                  <div class="dropdown-search">
+                    <input id="federation-search" type="text" placeholder="Buscar federación..." class="search-input" aria-label="Buscar federación" />
+                  </div>
+                  <div class="dropdown-list" id="federationsList">
+                    <div class="loading">Cargando federaciones...</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="championshipsGrid" class="championships-grid">
+          <div class="loading">Buscando campeonatos...</div>
+        </div>
+        <div id="paginationControls" class="pagination-controls"></div>
+      </section>
+
+      <!-- ATLETAS TAB -->
+      <section id="athletes" class="tab-content">
+        <div class="section-header">
+          <h2>Atletas</h2>
+          <button class="btn btn-primary" id="addAthleteBtn">
+            + Nuevo Atleta
+          </button>
+        </div>
+
+        <div id="athletesGrid" class="athletes-grid">
+          <div class="loading">Cargando atletas...</div>
+        </div>
+
+        <!-- Add Athlete Modal -->
+        <div id="athleteModal" class="modal">
+          <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Nuevo Atleta</h2>
+            <form id="athleteForm">
+              <input
+                type="text"
+                id="athleteName"
+                placeholder="Nombre del atleta"
+                required
+              />
+              <input
+                type="text"
+                id="athleteDiscipline"
+                placeholder="Disciplina (ej: Jiu-Jitsu, Nogi)"
+                required
+              />
+              <select id="athleteCountryId" required>
+                <option value="">Selecciona un país</option>
+              </select>
+              <button type="submit" class="btn btn-success">
+                Guardar Atleta
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <div id="assignEventsModal" class="modal">
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <h2>Asignar eventos</h2>
+          <div id="assignEventsList" class="assign-events-list">
+            <div class="loading">Cargando eventos...</div>
+          </div>
+          <button id="saveAssignedEventsBtn" class="btn btn-success">
+            Guardar asignación
+          </button>
+        </div>
+      </div>
+
+      <!-- EVENTOS TAB -->
+      <section id="events" class="tab-content">
+        <div class="section-header">
+          <h2>Eventos</h2>
+          <button class="btn btn-primary" id="addEventBtn">
+            + Nuevo Evento
+          </button>
+        </div>
+
+        <div id="eventsGrid" class="events-grid">
+          <div class="loading">Cargando eventos...</div>
+        </div>
+
+        <!-- Add Event Modal -->
+        <div id="eventModal" class="modal">
+          <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Nuevo Evento</h2>
+            <form id="eventForm">
+              <input
+                type="text"
+                id="eventName"
+                placeholder="Nombre del evento"
+                required
+              />
+              <input
+                type="date"
+                id="eventDate"
+                placeholder="Fecha del evento"
+                required
+              />
+              <select id="eventCountryId" required>
+                <option value="">Selecciona un país</option>
+              </select>
+              <button type="submit" class="btn btn-success">
+                Guardar Evento
+              </button>
+            </form>
+          </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
