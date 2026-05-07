@@ -4,8 +4,9 @@ const db = require('./db');
 const fingerprint = require('./fingerprint');
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(cors({
+  origin: '*'
+}));app.use(express.json({ limit: '10mb' }));
 
 // --- AUTH ---
 app.post('/api/login', (req, res) => {
@@ -658,6 +659,3 @@ app.get('/api/fingerprint/available', async (req, res) => {
 });
 
 const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor de Fight House corriendo en http://localhost:${PORT}`);
-});
