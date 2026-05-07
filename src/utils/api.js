@@ -1,4 +1,4 @@
-const API_URL = 'https://fh-0ckg.onrender.com';
+const API_URL = 'https://fh-0ckg.onrender.com/api';
 
 const handleResponse = async (response) => {
   if (!response.ok) {
