@@ -17,8 +17,7 @@ export const ALMACEN = [
 
 export const CATEGORIES = [
   { value: 'bebida', label: 'Bebida' },
-  { value: 'almacen', label: 'Almacén / Insumos' },
-  { value: 'mensualidad', label: 'Mensualidad' },
+  { value: 'insumo', label: 'Almacén / Insumos' },
   { value: 'clase_cortesia', label: 'Clase de Cortesía' },
 ]
 
