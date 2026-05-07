@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.3",
+    "cors": "^2.8.6",
     "iconsax-react": "^0.0.8",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

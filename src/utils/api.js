@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3001/api';
+const API_URL = 'https://fh-0ckg.onrender.com';
 
 const handleResponse = async (response) => {
   if (!response.ok) {
