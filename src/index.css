@@ -1,1 +1,18 @@
+:root {
+  --primary: #F2CB05;
+  --primary-dark: #F2B705;
+  --bg-light: #F2F2F2;
+  --text-muted: #8C8C8C;
+  --bg-dark: #0D0D0D;
+  --white: #ffffff;
+  --error: #e74c3c;
+  --success: #27ae60;
+  --border: #e0e0e0;
+}
 
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-light);
+  color: var(--bg-dark);
+}

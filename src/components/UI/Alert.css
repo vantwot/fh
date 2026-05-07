@@ -1,0 +1,46 @@
+.alert-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 300px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 3000;
+  animation: slideInRight 0.3s ease-out;
+  border-left: 6px solid transparent;
+}
+
+.alert-container.success { border-left-color: #27ae60; }
+.alert-container.error { border-left-color: #e74c3c; }
+.alert-container.warning { border-left-color: #F2CB05; }
+
+.alert-icon {
+  display: flex;
+  align-items: center;
+}
+
+.alert-message {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--bg-dark);
+}
+
+.alert-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

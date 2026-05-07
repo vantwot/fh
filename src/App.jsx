@@ -1,43 +1,128 @@
-import { useState, useEffect } from 'react'
-import './App.css'
-import SalesForm from './components/SalesForm'
-import SalesList from './components/SalesList'
-import Summary from './components/Summary'
-import { MoneyRecive } from 'iconsax-react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import MainLayout from './components/Layout/MainLayout';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import SalesPage from './pages/SalesPage';
+import InventoryPage from './pages/InventoryPage';
+import TeachersPage from './pages/TeachersPage';
+import ExpensesPage from './pages/ExpensesPage';
+import MembershipsPage from './pages/MembershipsPage';
+import MembersPage from './pages/MembersPage';
+import MembershipPaymentPage from './pages/MembershipPaymentPage';
+import ReportsPage from './pages/ReportsPage';
+import './App.css';
 
-function App() {
-  const [sales, setSales] = useState(() => {
-    const saved = localStorage.getItem('sales')
-    return saved ? JSON.parse(saved) : []
-  })
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <MainLayout>{children}</MainLayout>;
+};
 
-  useEffect(() => {
-    localStorage.setItem('sales', JSON.stringify(sales))
-  }, [sales])
-
-  const addSale = (saleData) => {
-    const newSale = { id: Date.now(), date: new Date().toLocaleDateString('es-AR'), ...saleData }
-    setSales(prev => [newSale, ...prev])
-  }
-
-  const deleteSale = (id) => {
-    setSales(prev => prev.filter(s => s.id !== id))
-  }
+function AppRoutes() {
+  const { isAuthenticated } = useAuth();
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1><MoneyRecive size={32} variant="Bold" color="#f7d82f" style={{ marginRight: '10px' }} /> Sistema de Ventas</h1>
-      </header>
-      <div className="app-content">
-        <SalesForm onAddSale={addSale} />
-        <div className="right-panel">
-          <Summary sales={sales} />
-          <SalesList sales={sales} onDeleteSale={deleteSale} />
-        </div>
-      </div>
-    </div>
-  )
+    <Routes>
+      <Route 
+        path="/login" 
+        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} 
+      />
+      
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/ventas" 
+        element={
+          <ProtectedRoute>
+            <SalesPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/inventario" 
+        element={
+          <ProtectedRoute>
+            <InventoryPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/mensualidades" 
+        element={
+          <ProtectedRoute>
+            <MembershipsPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/afiliados" 
+        element={
+          <ProtectedRoute>
+            <MembersPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/reportes" 
+        element={
+          <ProtectedRoute>
+            <ReportsPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route 
+        path="/pagos-membresia" 
+        element={
+          <ProtectedRoute>
+            <MembershipPaymentPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/profesores" 
+        element={
+          <ProtectedRoute>
+            <TeachersPage />
+          </ProtectedRoute>
+        } 
+      />
+      
+      <Route 
+        path="/gastos" 
+        element={
+          <ProtectedRoute>
+            <ExpensesPage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
 
-export default App
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;

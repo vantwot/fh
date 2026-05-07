@@ -1,7 +1,8 @@
-import { Coffee, ShoppingBag, Calendar, Gift, Money, Send2, CloseCircle } from 'iconsax-react'
+import { Coffee, ShoppingBag, Calendar, Gift, Money, Send2, CloseCircle, ArrowLeft2, ArrowRight2 } from 'iconsax-react'
 
 const CATEGORY_LABELS = {
   bebida: 'Bebida',
+  insumo: 'Almacén',
   almacen: 'Almacén',
   mensualidad: 'Mensualidad',
   clase_cortesia: 'Clase Cortesía',
@@ -13,9 +14,10 @@ const PAYMENT_LABELS = {
 }
 
 const getCategoryIcon = (categoryValue) => {
-  const iconProps = { size: 16, variant: 'Bold', color: '#9ddde9' }
+  const iconProps = { size: 16, variant: 'Bold', color: '#F2B705' }
   switch (categoryValue) {
     case 'bebida': return <Coffee {...iconProps} />
+    case 'insumo': return <ShoppingBag {...iconProps} />
     case 'almacen': return <ShoppingBag {...iconProps} />
     case 'mensualidad': return <Calendar {...iconProps} />
     case 'clase_cortesia': return <Gift {...iconProps} />
@@ -24,7 +26,7 @@ const getCategoryIcon = (categoryValue) => {
 }
 
 const getPaymentIcon = (paymentValue) => {
-  const iconProps = { size: 16, variant: 'Bold', color: '#9ddde9' }
+  const iconProps = { size: 16, variant: 'Bold', color: '#F2B705' }
   switch (paymentValue) {
     case 'efectivo': return <Money {...iconProps} />
     case 'transferencia': return <Send2 {...iconProps} />
@@ -32,8 +34,8 @@ const getPaymentIcon = (paymentValue) => {
   }
 }
 
-export default function SalesList({ sales, onDeleteSale }) {
-  if (sales.length === 0) {
+export default function SalesList({ sales, onDeleteSale, page, totalPages, totalSales, onPageChange }) {
+  if (totalSales === 0) {
     return (
       <div className="sales-list">
         <h2>Ventas del día</h2>
@@ -44,7 +46,7 @@ export default function SalesList({ sales, onDeleteSale }) {
 
   return (
     <div className="sales-list">
-      <h2>Ventas del día <span className="count">({sales.length})</span></h2>
+      <h2>Ventas del día <span className="count">({totalSales})</span></h2>
       <div className="table-wrapper">
         <table>
           <thead>
@@ -72,25 +74,31 @@ export default function SalesList({ sales, onDeleteSale }) {
                 <td>
                   {sale.category === 'clase_cortesia' ? (
                     <div className="client-info">
-                      <div>{sale.clientName}</div>
+                      <div>{sale.client_name}</div>
                       <div className="phone">{sale.phone}</div>
                     </div>
                   ) : (
-                    sale.clientName || '—'
+                    sale.client_name || '—'
                   )}
                 </td>
                 <td>
-                  <span className={`badge badge-pay-${sale.paymentMethod}`}>
-                    <span className="badge-icon">{getPaymentIcon(sale.paymentMethod)}</span>
-                    <span className="badge-label">{PAYMENT_LABELS[sale.paymentMethod]}</span>
-                  </span>
+                  {sale.category === 'clase_cortesia' ? (
+                    <span className="badge">N/A</span>
+                  ) : (
+                    <span className={`badge badge-pay-${sale.payment_method}`}>
+                      <span className="badge-icon">{getPaymentIcon(sale.payment_method)}</span>
+                      <span className="badge-label">{PAYMENT_LABELS[sale.payment_method]}</span>
+                    </span>
+                  )}
                 </td>
-                <td className="amount-col">{sale.amount.toLocaleString('es-AR')} COP</td>
+                <td className="amount-col">
+                  {sale.category === 'clase_cortesia' ? 'N/A' : `${sale.amount.toLocaleString('es-AR')} COP`}
+                </td>
                 <td>
                   <button
                     className="delete-btn"
                     onClick={() => onDeleteSale(sale.id)}
-                    title="Eliminar"
+                    title="Eliminar venta"
                   >
                     <CloseCircle size={18} variant="Bold" color="#e74c3c" />
                   </button>
@@ -100,6 +108,38 @@ export default function SalesList({ sales, onDeleteSale }) {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button
+            className="page-btn"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
+            aria-label="Página anterior"
+          >
+            <ArrowLeft2 size={18} variant="Bold" color="currentColor" />
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button
+              key={p}
+              className={`page-btn ${p === page ? 'active' : ''}`}
+              onClick={() => onPageChange(p)}
+            >
+              {p}
+            </button>
+          ))}
+
+          <button
+            className="page-btn"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+            aria-label="Página siguiente"
+          >
+            <ArrowRight2 size={18} variant="Bold" color="currentColor" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
