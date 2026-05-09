@@ -13,6 +13,8 @@
     "@supabase/supabase-js": "^2.105.3",
     "cors": "^2.8.6",
     "iconsax-react": "^0.0.8",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.15.0"

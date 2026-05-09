@@ -1,56 +1,40 @@
 import { useState, useEffect, useRef } from 'react';
 import { AddCircle, Edit, CloseCircle, Camera, FingerScan, Trash, TickCircle } from 'iconsax-react';
 import Button from '../UI/Button';
-import { api } from '../../utils/api';
 
-const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
+const EmployeesForm = ({ onSave, editingItem, onCancelEdit }) => {
   const [formData, setFormData] = useState({
-    name: '',
     names: '',
     lastNames: '',
     identification: '',
     identification_type_id: 'Cédula de Ciudadanía',
-    code: '',
     phone: '',
-    email: '',
     birth_date: '',
-    status: 'Activo',
-    membership_id: '',
-    registration_date: new Date().toISOString().split('T')[0],
-    photo: '',
-    fingerprint: ''
+    charge: '',
+    isActive: 1,
+    sald: '',
+    photo: ''
   });
 
-  const [memberships, setMemberships] = useState([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isReadingFingerprint, setIsReadingFingerprint] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    fetchMemberships();
     if (editingItem) {
       setFormData({
         ...editingItem,
-        membership_id: editingItem.membership_id || '',
+        isActive: editingItem.isActive !== undefined ? editingItem.isActive : 1,
         photo: editingItem.photo || '',
-        fingerprint: editingItem.fingerprint || ''
+        sald: editingItem.sald || ''
       });
     }
   }, [editingItem]);
 
-  const fetchMemberships = async () => {
-    try {
-      const data = await api.getMemberships(1, 100);
-      setMemberships(data.items);
-    } catch (err) {
-      console.error('Error fetching memberships', err);
-    }
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: name === 'isActive' ? Number(value) : value }));
   };
 
   const startCamera = async () => {
@@ -96,7 +80,6 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
     setIsReadingFingerprint(true);
     
     try {
-      // Llamar al endpoint del servidor que integra con fprintd
       const response = await fetch('http://localhost:3001/api/fingerprint/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -119,7 +102,7 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
       
     } catch (err) {
       console.error("Error al leer huella:", err);
-      alert(`Error al leer la huella digital:\n${err.message}\n\nAsegúrate de que:\n1. El servidor está corriendo (npm start en /server)\n2. El lector ELAN está conectado\n3. fprintd está en funcionamiento`);
+      alert(`Error al leer la huella digital:\n${err.message}`);
     } finally {
       setIsReadingFingerprint(false);
     }
@@ -136,7 +119,7 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
         <div className="photo-container">
           {formData.photo ? (
             <div className="captured-photo">
-              <img src={formData.photo} alt="Member" />
+              <img src={formData.photo} alt="Empleado" />
               <button type="button" className="remove-photo" onClick={() => setFormData(prev => ({ ...prev, photo: '' }))}>
                 <Trash size={16} variant="Bold" />
               </button>
@@ -156,28 +139,25 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
           )}
         </div>
 
-        <div className="fingerprint-container">
-          <div className={`finger-box ${formData.fingerprint ? 'success' : ''} ${isReadingFingerprint ? 'scanning' : ''}`} onClick={!formData.fingerprint ? handleFingerprint : null}>
-            {isReadingFingerprint ? (
-              <div className="scan-animation">
-                <FingerScan size={40} variant="linear" color="var(--primary)" />
-                <div className="scan-line" />
-              </div>
-            ) : formData.fingerprint ? (
-              <>
-                <TickCircle size={40} variant="Bold" color="#4caf50" />
-                <span className="fp-status">Huella Registrada</span>
-                <button type="button" className="reset-fp" onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, fingerprint: '' })); }}>
-                  Reiniciar
-                </button>
-              </>
-            ) : (
-              <>
-                <FingerScan size={40} variant="linear" color="var(--text-muted)" />
-                <span>Registrar Huella</span>
-              </>
-            )}
-          </div>
+        <div className="fingerprint-container" style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '10px', justifyContent: 'center' }}>
+          <label style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Salario / Hora</label>
+          <input
+            type="text"
+            name="sald"
+            value={formData.sald}
+            onChange={handleChange}
+            placeholder="Ej: $25000"
+            style={{
+              padding: '12px',
+              borderRadius: '10px',
+              border: '1px solid rgba(0,0,0,0.1)',
+              background: 'var(--bg-light)',
+              color: 'var(--text-light)',
+              outline: 'none',
+              fontSize: '1rem',
+              width: '100%'
+            }}
+          />
         </div>
       </div>
 
@@ -201,21 +181,12 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
             value={formData.lastNames}
             onChange={handleChange}
             placeholder="Ej: Pérez"
+            required
           />
         </div>
       </div>
 
       <div className="form-row">
-        <div className="form-group" style={{ flex: 1 }}>
-          <label>Código Interno</label>
-          <input
-            type="text"
-            name="code"
-            value={formData.code}
-            onChange={handleChange}
-            placeholder="Código del sistema"
-          />
-        </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label>Tipo de Documento</label>
           <select name="identification_type_id" value={formData.identification_type_id} onChange={handleChange}>
@@ -225,11 +196,8 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
             <option value="Pasaporte">Pasaporte</option>
           </select>
         </div>
-      </div>
-
-      <div className="form-row">
         <div className="form-group" style={{ flex: 1 }}>
-          <label>Identificación / Cédula</label>
+          <label>Identificación</label>
           <input
             type="text"
             name="identification"
@@ -239,7 +207,9 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
             required
           />
         </div>
+      </div>
 
+      <div className="form-row">
         <div className="form-group" style={{ flex: 1 }}>
           <label>Teléfono</label>
           <input
@@ -250,27 +220,38 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
             placeholder="300 000 0000"
           />
         </div>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label>Fecha de Nacimiento</label>
+          <input
+            type="date"
+            name="birth_date"
+            value={formData.birth_date}
+            onChange={handleChange}
+          />
+        </div>
       </div>
 
       <div className="form-row">
         <div className="form-group" style={{ flex: 1 }}>
-          <label>Estado</label>
-          <select name="status" value={formData.status} onChange={handleChange}>
-            <option value="Activo">Activo</option>
-            <option value="Inactivo">Inactivo</option>
-          </select>
+          <label>Cargo</label>
+          <input
+            type="text"
+            name="charge"
+            value={formData.charge}
+            onChange={handleChange}
+            placeholder="Ej: Instructor"
+          />
         </div>
-
         <div className="form-group" style={{ flex: 1 }}>
-          <label>Membresía Actual</label>
-          <select name="membership_id" value={formData.membership_id} onChange={handleChange}>
-            <option value="">Sin membresía</option>
-            {memberships.map(mb => (
-              <option key={mb.id} value={mb.id}>{mb.name}</option>
-            ))}
+          <label>Estado</label>
+          <select name="isActive" value={formData.isActive} onChange={handleChange}>
+            <option value={1}>Activo</option>
+            <option value={0}>Inactivo</option>
           </select>
         </div>
       </div>
+
+
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />
 
@@ -284,7 +265,7 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
         />
         <Button 
           type="submit"
-          label={editingItem ? 'Actualizar Afiliado' : 'Guardar Afiliado'}
+          label={editingItem ? 'Actualizar Empleado' : 'Guardar Empleado'}
           variant="primary"
           icon={editingItem ? <Edit size={20} variant="linear" color="#0D0D0D" /> : <AddCircle size={20} variant="Bold" color="#0D0D0D" />}
           style={{ flex: 2 }}
@@ -465,4 +446,4 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
   );
 };
 
-export default MembersForm;
+export default EmployeesForm;

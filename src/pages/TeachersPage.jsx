@@ -1,14 +1,24 @@
 import { useState, useEffect } from 'react';
-import TeacherForm from '../components/Teachers/TeacherForm';
-import TeacherList from '../components/Teachers/TeacherList';
+import WeeklyCalendar from '../components/Teachers/WeeklyCalendar';
+// import WeeklyPayrollReport from '../components/Teachers/WeeklyPayrollReport';
 import PayrollSummary from '../components/Teachers/PayrollSummary';
 import { Teacher } from 'iconsax-react';
 import { api } from '../utils/api';
 
+const getMonday = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day + 6) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
 const TeachersPage = () => {
-  const [teachers, setTeachers] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
 
   useEffect(() => {
     fetchData();
@@ -16,34 +26,49 @@ const TeachersPage = () => {
 
   const fetchData = async () => {
     try {
-      const [teachersData, logsData] = await Promise.all([
-        api.getTeachers(),
+      const [employeeData, logsData] = await Promise.all([
+        api.getEmployees(1, 1000), // Traer todos los empleados
         api.getTeacherLogs()
       ]);
-      setTeachers(teachersData);
+      // Pasar datos completos del empleado sin transformar
+      console.log('Loaded employees:', employeeData.items);
+      console.log('Loaded logs:', logsData);
+      setEmployees(employeeData.items);
       setLogs(logsData);
     } catch (err) {
-      console.error('Error fetching teachers data:', err);
+      console.error('Error fetching employee data:', err);
+      alert('Error cargando empleados: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAddTeacher = async (teacher) => {
+  const refreshLogs = async () => {
     try {
-      const saved = await api.addTeacher(teacher);
-      setTeachers(prev => [...prev, saved]);
+      const logsData = await api.getTeacherLogs();
+      setLogs(logsData);
     } catch (err) {
-      alert('Error al agregar profesor: ' + err.message);
+      console.error('Error refreshing logs:', err);
     }
   };
 
-  const handleLogClass = async (log) => {
+  const handleAddEmployee = async (employee) => {
+    // Los empleados ya vienen de EmployeesPage, no se crean aquí
+    alert('Los empleados se gestionan en el módulo de Empleados');
+  };
+
+  const handleLogHours = async (log) => {
     try {
+      if (!log.teacherId) {
+        throw new Error('TeacherId no especificado');
+      }
+      console.log('Adding teacher log:', log);
       const saved = await api.addTeacherLog(log);
       setLogs(prev => [saved, ...prev]);
     } catch (err) {
-      alert('Error al registrar horas: ' + err.message);
+      console.error('Error in handleLogHours:', err);
+      alert('Error al guardar horas: ' + err.message);
+      throw err;
     }
   };
 
@@ -58,29 +83,31 @@ const TeachersPage = () => {
     }
   };
 
-  if (loading) return <div className="placeholder">Cargando profesores...</div>;
+  if (loading) return <div className="placeholder">Cargando empleados...</div>;
 
   return (
     <div className="page-container">
       <header className="app-header">
         <h1>
           <Teacher size={32} variant="Bold" color="#F2CB05" /> 
-          Planillas de Profesores
+          Pagos Empleados
         </h1>
       </header>
       <div className="app-content">
-        <TeacherForm 
-          teachers={teachers} 
-          onAddTeacher={handleAddTeacher} 
-          onLogClass={handleLogClass} 
-        />
-        <div className="right-panel">
-          <PayrollSummary teachers={teachers} logs={logs} />
-          <TeacherList 
-            teachers={teachers} 
-            logs={logs} 
-            onDeleteLog={handleDeleteLog} 
+        <div style={{ flex: '1 1 auto', minWidth: '0' }}>
+          {/* <WeeklyPayrollReport 
+            teachers={employees}
+            weekStart={weekStart}
+          /> */}
+          <WeeklyCalendar 
+            teachers={employees}
+            onAttendanceChange={refreshLogs}
+            weekStart={weekStart}
+            setWeekStart={setWeekStart}
           />
+        </div>
+        <div className="right-panel">
+          <PayrollSummary teachers={employees} logs={logs} weekStart={weekStart} setWeekStart={setWeekStart} />
         </div>
       </div>
     </div>

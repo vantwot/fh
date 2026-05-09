@@ -47,22 +47,28 @@ const MembershipPaymentPage = () => {
   };
 
   useEffect(() => {
-    setPaymentData(prev => ({
-      ...prev,
-      registration_fee: includeRegistration ? 40000 : 0
-    }));
+    const regFee = includeRegistration ? 40000 : 0;
+    setPaymentData(prev => {
+      const oldRegFee = prev.registration_fee || 0;
+      const diff = regFee - oldRegFee;
+      return {
+        ...prev,
+        registration_fee: regFee,
+        amount_paid: Math.max(0, parseFloat(prev.amount_paid || 0) + diff)
+      };
+    });
   }, [includeRegistration]);
 
   const fetchInitialData = async () => {
     try {
       const mbData = await api.getMemberships(1, 100);
       setMemberships(mbData.items);
-      
+
       const mData = await api.getMembers(1, 1000);
       setMembers(mData.items);
 
       if (initialMember) {
-        handleMemberSelect(initialMember);
+        handleMemberSelect(initialMember, mbData.items);
       }
     } catch (err) {
       console.error(err);
@@ -76,10 +82,10 @@ const MembershipPaymentPage = () => {
     try {
       const balance = await api.getMemberBalance(memberId);
       setTotalDebtInfo(balance);
-      
+
       const history = await api.getMemberPayments(memberId);
       setPaymentHistory(history);
-      
+
       return balance;
     } catch (err) {
       console.error("Error fetching extras:", err);
@@ -87,11 +93,11 @@ const MembershipPaymentPage = () => {
     }
   };
 
-  const handleMemberSelect = async (member) => {
+  const handleMemberSelect = async (member, membershipsList = memberships) => {
     setSelectedMember(member);
     setSearchTerm('');
-    const selectedMb = memberships.find(m => m.id === member.membership_id);
-    
+    const selectedMb = membershipsList.find(m => m.id === member.membership_id);
+
     const balanceInfo = await fetchMemberExtras(member.id);
     const startDate = balanceInfo.membershipStart || paymentData.start_date;
     const endDate = balanceInfo.membershipEnd || calculateNextMonthEnd(startDate);
@@ -108,7 +114,7 @@ const MembershipPaymentPage = () => {
         visits: selectedMb ? (selectedMb.number_duration || 0) : 0,
         start_date: startDate,
         end_date: endDate,
-        observation: `Pago de saldo pendiente (Membresía: $${(selectedMb?.cost || 0).toLocaleString()})`
+        observation: ''
       }));
       setIncludeRegistration(false);
     } else {
@@ -143,11 +149,23 @@ const MembershipPaymentPage = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setPaymentData(prev => ({
-      ...prev,
-      [name]: value,
-      ...(name === 'start_date' ? { end_date: calculateNextMonthEnd(value) } : {})
-    }));
+    setPaymentData(prev => {
+      const newData = {
+        ...prev,
+        [name]: value,
+        ...(name === 'start_date' ? { end_date: calculateNextMonthEnd(value) } : {})
+      };
+
+      // Sync amount_paid with discount changes to keep total balance correct
+      if (name === 'discount') {
+        const oldDisc = parseFloat(prev.discount) || 0;
+        const newDisc = parseFloat(value) || 0;
+        const diff = newDisc - oldDisc;
+        newData.amount_paid = Math.max(0, parseFloat(prev.amount_paid || 0) - diff);
+      }
+
+      return newData;
+    });
   };
 
   const calculateBalances = () => {
@@ -157,12 +175,11 @@ const MembershipPaymentPage = () => {
     const paid = parseFloat(paymentData.amount_paid) || 0;
 
     const netValue = total - disc + regFee;
-    const saleBalance = netValue - paid;
-    const finalDebtAfterThis = (totalDebtInfo.balance > 0 ? totalDebtInfo.balance : netValue) - paid;
+    const finalDebtAfterThis = netValue - paid;
 
     return {
       netValue,
-      saleBalance,
+      saleBalance: finalDebtAfterThis,
       finalDebtAfterThis
     };
   };
@@ -187,10 +204,10 @@ const MembershipPaymentPage = () => {
     try {
       await api.processMembershipPayment(paymentData);
       setAlert({ type: 'success', message: 'Pago procesado correctamente' });
-      
+
       // Update data instead of clearing if there's still debt, or just refresh
       fetchMemberExtras(selectedMember.id);
-      
+
       // Optionally reset partial fields
       setPaymentData(prev => ({
         ...prev,
@@ -202,11 +219,11 @@ const MembershipPaymentPage = () => {
     }
   };
 
-  const filteredMembers = searchTerm.length > 2 
-    ? members.filter(m => 
-        m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        m.identification?.includes(searchTerm)
-      )
+  const filteredMembers = searchTerm.length > 2
+    ? members.filter(m =>
+      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      m.identification?.includes(searchTerm)
+    )
     : [];
 
   if (loading) return <div className="placeholder">Cargando...</div>;
@@ -234,14 +251,14 @@ const MembershipPaymentPage = () => {
             <label>Buscar Afiliado</label>
             <div className="search-input-wrapper">
               <SearchNormal1 size={20} variant="linear" color="#0D0D0D" className="search-icon" />
-              <input 
-                type="text" 
-                placeholder="Nombre o identificación..." 
+              <input
+                type="text"
+                placeholder="Nombre o identificación..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            
+
             {filteredMembers.length > 0 && (
               <div className="search-results">
                 {filteredMembers.map(m => (
@@ -279,9 +296,9 @@ const MembershipPaymentPage = () => {
                       <div className="form-grid-col">
                         <div className="form-group">
                           <label>Membresía</label>
-                          <select 
-                            name="membership_id" 
-                            value={paymentData.membership_id} 
+                          <select
+                            name="membership_id"
+                            value={paymentData.membership_id}
                             onChange={handleMembershipChange}
                             required
                           >
@@ -299,7 +316,7 @@ const MembershipPaymentPage = () => {
                           </div>
                           <div className="form-group">
                             <label><Calendar size={14} /> Fecha Final</label>
-                            <input type="date" name="end_date" value={paymentData.end_date} readOnly className="read-only" />
+                            <input type="date" name="end_date" value={paymentData.end_date} onChange={handleChange} />
                           </div>
                         </div>
 
@@ -323,13 +340,13 @@ const MembershipPaymentPage = () => {
                             <input type="number" name="discount" value={paymentData.discount} onChange={handleChange} />
                           </div>
                         </div>
-                        
+
                         <div className="registration-fee-box">
                           <label className="checkbox-container">
-                            <input 
-                              type="checkbox" 
-                              checked={includeRegistration} 
-                              onChange={(e) => setIncludeRegistration(e.target.checked)} 
+                            <input
+                              type="checkbox"
+                              checked={includeRegistration}
+                              onChange={(e) => setIncludeRegistration(e.target.checked)}
                             />
                             <span className="label-text">Cobrar Inscripción ($40.000)</span>
                           </label>
@@ -373,13 +390,13 @@ const MembershipPaymentPage = () => {
 
                             <div className="form-group">
                               <label>Monto Recibido</label>
-                              <input 
-                                type="number" 
-                                name="amount_paid" 
-                                value={paymentData.amount_paid} 
-                                onChange={handleChange} 
+                              <input
+                                type="number"
+                                name="amount_paid"
+                                value={paymentData.amount_paid}
+                                onChange={handleChange}
                                 className="payment-input"
-                                required 
+                                required
                               />
                             </div>
 
@@ -390,30 +407,13 @@ const MembershipPaymentPage = () => {
                                 <option value="transferencia">Transferencia</option>
                               </select>
                             </div>
-
-                            <div className="status-summary-box">
-                              <div className="status-item">
-                                <span className="label">Saldo Restante Final:</span>
-                                <span className={`value ${finalDebtAfterThis > 0 ? 'debt' : ''}`}>
-                                  ${finalDebtAfterThis.toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="status-indicator">
-                                {finalDebtAfterThis <= 0 ? (
-                                  <div className="paid-tag"><TickCircle size={16} variant="Bold" /> PAGADO COMPLETAMENTE</div>
-                                ) : (
-                                  <div className="pending-tag">PAGO PENDIENTE</div>
-                                )}
-                              </div>
-                            </div>
                           </div>
 
                           <div className="form-group">
-                            <label>Observación</label>
-                            <textarea 
-                              name="observation" 
-                              value={paymentData.observation} 
-                              onChange={handleChange} 
+                            <textarea
+                              name="observation"
+                              value={paymentData.observation}
+                              onChange={handleChange}
                               rows="3"
                               placeholder="Notas adicionales..."
                             />

@@ -1,15 +1,15 @@
 .alert-container {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  top: 24px;
+  right: 24px;
   min-width: 300px;
-  padding: 16px;
+  padding: 20px;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   z-index: 3000;
   animation: slideInRight 0.3s ease-out;
   border-left: 6px solid transparent;

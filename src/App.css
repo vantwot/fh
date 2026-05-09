@@ -8,7 +8,7 @@ body {
 }
 
 /* ── Layout ─────────────────────────────────── */
-.app-container, .page-container { max-width: 1300px; margin: 0 auto; padding: 16px; width: 100%; }
+.app-container, .page-container { max-width: 1300px; margin: 0 auto; padding: 32px 24px; width: 100%; }
 
 .placeholder {
   display: flex;
@@ -24,9 +24,9 @@ body {
 .app-header {
   background: linear-gradient(135deg, var(--bg-dark), var(--bg-dark));
   color: #fff;
-  padding: 24px 32px;
+  padding: 32px 40px;
   border-radius: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 36px;
   text-align: center;
 }
 .app-header h1 { 
@@ -38,22 +38,33 @@ body {
   gap: 12px;
 }
 
-.app-content { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.app-content {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
 
-.right-panel { flex: 1; min-width: 320px; display: flex; flex-direction: column; gap: 20px; }
+.right-panel {
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
 
 /* ── Form ────────────────────────────────────── */
 .sales-form {
   background: #fff;
   border-radius: 14px;
-  padding: 28px 24px;
+  padding: 32px 28px;
   box-shadow: 0 4px 18px rgba(0,0,0,.08);
   min-width: 300px;
   flex: 0 0 340px;
 }
 .sales-form h2 { margin-bottom: 20px; font-size: 1.3rem; color: var(--bg-dark); }
 
-.form-group { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+.form-group { margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
 .form-group label { font-size: .85rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .5px; }
 
 .form-group input {
@@ -69,7 +80,7 @@ body {
 .error { color: #e74c3c; font-size: .8rem; }
 
 /* Category & payment buttons */
-.category-buttons, .payment-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.category-buttons, .payment-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .cat-btn, .pay-btn {
   padding: 8px 14px;
@@ -91,7 +102,7 @@ body {
 
 .submit-btn {
   width: 100%;
-  padding: 13px;
+  padding: 15px;
   background: linear-gradient(135deg, var(--primary), var(--primary));
   color: var(--bg-dark);
   border: none;
@@ -100,7 +111,7 @@ body {
   font-weight: 700;
   cursor: pointer;
   transition: transform .15s, box-shadow .15s;
-  margin-top: 4px;
+  margin-top: 12px;
 }
 .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(242, 203, 5, .35); }
 .submit-btn:active { transform: translateY(0); }
@@ -109,7 +120,7 @@ body {
 .summary {
   background: #fff;
   border-radius: 14px;
-  padding: 24px;
+  padding: 28px;
   box-shadow: 0 4px 18px rgba(0,0,0,.08);
 }
 .summary h2 { font-size: 1.2rem; margin-bottom: 16px; color: var(--bg-dark); }
@@ -120,14 +131,14 @@ body {
   align-items: center;
   background: linear-gradient(135deg, var(--bg-dark), var(--bg-dark));
   color: #fff;
-  padding: 14px 18px;
+  padding: 18px 22px;
   border-radius: 10px;
   font-size: 1.1rem;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 .summary-total strong { font-size: 1.5rem; }
 
-.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 
 .summary-card {
   border-radius: 10px;
@@ -165,11 +176,57 @@ body {
 }
 .cat-icon { display: flex; align-items: center; }
 
+.week-controls {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.week-controls button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.week-controls button:hover { opacity: .95; }
+.calendar-table-wrapper {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #ececec;
+  padding: 24px;
+}
+.weekly-calendar-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+.weekly-calendar-table th,
+.weekly-calendar-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid #f4f4f4;
+}
+.weekly-calendar-table th {
+  text-align: left;
+  font-size: .85rem;
+  color: #666;
+  text-transform: uppercase;
+}
+.weekly-calendar-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.weekly-calendar-table td {
+  color: #333;
+}
+
 /* ── Sales list ───────────────────────────────── */
 .sales-list {
   background: #fff;
   border-radius: 14px;
-  padding: 24px;
+  padding: 28px;
   box-shadow: 0 4px 18px rgba(0,0,0,.08);
 }
 .sales-list h2 { font-size: 1.2rem; margin-bottom: 16px; color: var(--bg-dark); }
@@ -181,7 +238,7 @@ body {
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th {
   text-align: left;
-  padding: 10px 12px;
+  padding: 14px 16px;
   background: #f8f9fa;
   color: #555;
   font-size: .8rem;
@@ -189,7 +246,7 @@ th {
   letter-spacing: .5px;
   border-bottom: 2px solid #e0e0e0;
 }
-td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+td { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: #fafafa; }
 

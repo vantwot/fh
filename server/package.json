@@ -8,8 +8,14 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
+    "canvas": "^3.2.3",
     "cors": "^2.8.5",
-    "express": "^4.19.2"
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2",
+    "jspdf": "^4.2.1",
+    "node-schedule": "^2.1.1",
+    "nodemailer": "^8.0.7",
+    "pdfkit": "^0.18.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

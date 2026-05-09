@@ -1,7 +1,11 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const fingerprint = require('./fingerprint');
+const crypto = require('crypto');
+const { sendPayrollReport, schedulePayrollReport } = require('./payroll-report');
 
 const app = express();
 app.use(cors({
@@ -148,22 +152,91 @@ app.post('/api/teachers', (req, res) => {
 });
 
 app.get('/api/teacher-logs', (req, res) => {
-  const logs = db.prepare('SELECT * FROM teacher_logs ORDER BY id DESC').all();
-  res.json(logs);
+  const { startDate, endDate } = req.query;
+  if (startDate && endDate) {
+    const logs = db.prepare('SELECT * FROM teacher_logs WHERE date >= ? AND date <= ? ORDER BY date ASC, hour_slot ASC').all(startDate, endDate);
+    res.json(logs);
+  } else {
+    const logs = db.prepare('SELECT * FROM teacher_logs ORDER BY id DESC').all();
+    res.json(logs);
+  }
 });
 
 app.post('/api/teacher-logs', (req, res) => {
   const { teacherId, hours, description, date } = req.body;
-  const info = db.prepare(`
-    INSERT INTO teacher_logs (teacher_id, hours, description, date)
-    VALUES (?, ?, ?, ?)
-  `).run(teacherId, hours, description, date);
-  res.json({ id: info.lastInsertRowid, ...req.body });
+  
+  console.log('POST /api/teacher-logs received:', req.body);
+  
+  // Validar que teacherId sea válido
+  if (!teacherId) {
+    console.error('Missing teacherId in request');
+    return res.status(400).json({ error: 'teacherId es requerido' });
+  }
+
+  // Verificar que el empleado existe
+  const employee = db.prepare('SELECT id FROM employees WHERE id = ?').get(teacherId);
+  if (!employee) {
+    console.error('Employee not found with ID:', teacherId);
+    return res.status(400).json({ error: `Empleado con ID ${teacherId} no encontrado` });
+  }
+
+  try {
+    const info = db.prepare(`
+      INSERT INTO teacher_logs (teacher_id, hours, description, date)
+      VALUES (?, ?, ?, ?)
+    `).run(teacherId, hours, description, date);
+    
+    console.log('Teacher log inserted successfully:', info.lastInsertRowid);
+    res.json({ id: info.lastInsertRowid, ...req.body });
+  } catch (err) {
+    console.error('Error inserting teacher log:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/teacher-logs/:id', (req, res) => {
   db.prepare('DELETE FROM teacher_logs WHERE id = ?').run(req.params.id);
   res.json({ success: true });
+});
+
+// POST toggle attendance for a specific slot (date + hour)
+app.post('/api/teacher-logs/toggle', (req, res) => {
+  const { teacherId, date, hourSlot } = req.body;
+  if (!teacherId || !date || hourSlot === undefined || hourSlot === null) {
+    return res.status(400).json({ error: 'teacherId, date, hourSlot son requeridos' });
+  }
+  const employee = db.prepare('SELECT id FROM employees WHERE id = ?').get(teacherId);
+  if (!employee) return res.status(400).json({ error: 'Empleado no encontrado' });
+
+  const existing = db.prepare('SELECT id FROM teacher_logs WHERE teacher_id = ? AND date = ? AND hour_slot = ?').get(teacherId, date, hourSlot);
+  if (existing) {
+    db.prepare('DELETE FROM teacher_logs WHERE id = ?').run(existing.id);
+    res.json({ action: 'removed' });
+  } else {
+    const info = db.prepare('INSERT INTO teacher_logs (teacher_id, date, hours, hour_slot, description) VALUES (?, ?, 1, ?, ?)').run(teacherId, date, hourSlot, `${hourSlot}:00`);
+    res.json({ action: 'added', id: info.lastInsertRowid });
+  }
+});
+
+// --- EMPLOYEE SCHEDULES ---
+app.get('/api/employee-schedules', (req, res) => {
+  const schedules = db.prepare('SELECT * FROM employee_schedules').all();
+  res.json(schedules);
+});
+
+app.post('/api/employee-schedules/toggle', (req, res) => {
+  const { employeeId, dayIndex, hour } = req.body;
+  if (!employeeId || dayIndex === undefined || hour === undefined) {
+    return res.status(400).json({ error: 'employeeId, dayIndex, hour son requeridos' });
+  }
+  const existing = db.prepare('SELECT id FROM employee_schedules WHERE employee_id = ? AND day_index = ? AND hour = ?').get(employeeId, dayIndex, hour);
+  if (existing) {
+    db.prepare('DELETE FROM employee_schedules WHERE id = ?').run(existing.id);
+    res.json({ action: 'removed' });
+  } else {
+    const info = db.prepare('INSERT OR IGNORE INTO employee_schedules (employee_id, day_index, hour) VALUES (?, ?, ?)').run(employeeId, dayIndex, hour);
+    res.json({ action: 'added', id: info.lastInsertRowid });
+  }
 });
 
 // --- EXPENSES ---
@@ -253,11 +326,15 @@ app.get('/api/members', (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
+  const search = req.query.search || '';
 
-  const total = db.prepare('SELECT COUNT(*) as count FROM members').get().count;
-  const items = db.prepare(`
+  const searchPattern = `%${search}%`;
+  const searchWhere = search ? `WHERE COALESCE(m.name, m.names || ' ' || m.lastNames) LIKE ? OR m.identification LIKE ?` : '';
+
+  let countQuery = 'SELECT COUNT(*) as count FROM members m';
+  let dataQuery = `
     SELECT m.*, mb.name as membership_name,
-      COALESCE(mp.visits, 0) as visitsRemaining
+      COALESCE(mp.visits, mb.number_duration, 0) as visitsRemaining
     FROM members m
     LEFT JOIN memberships mb ON m.membership_id = mb.id
     LEFT JOIN membership_payments mp ON mp.id = (
@@ -266,8 +343,19 @@ app.get('/api/members', (req, res) => {
       ORDER BY date DESC
       LIMIT 1
     )
-    ORDER BY m.name ASC LIMIT ? OFFSET ?
-  `).all(limit, offset);
+    ${searchWhere}
+    ORDER BY CASE WHEN m.isActive = 1 THEN 0 ELSE 1 END ASC, COALESCE(m.name, m.names || ' ' || m.lastNames) ASC LIMIT ? OFFSET ?
+  `;
+
+  let total, items;
+  if (search) {
+    countQuery += ' ' + searchWhere;
+    total = db.prepare(countQuery).get(searchPattern, searchPattern).count;
+    items = db.prepare(dataQuery).all(searchPattern, searchPattern, limit, offset);
+  } else {
+    total = db.prepare(countQuery).get().count;
+    items = db.prepare(dataQuery).all(limit, offset);
+  }
 
   res.json({
     items,
@@ -331,38 +419,203 @@ app.get('/api/reports/summary', (req, res) => {
 });
 
 app.post('/api/members', (req, res) => {
-  const { name, identification, phone, email, birth_date, status, registration_date, membership_id, photo, fingerprint } = req.body;
+  const { 
+    name, identification, phone, email, birth_date, status, registration_date, 
+    membership_id, photo, fingerprint, names, lastNames, code, 
+    identification_type_id, isActive, membershipInit, membershipExpired, numberVisits 
+  } = req.body;
+  
   try {
-    const info = db.prepare(`
-      INSERT INTO members (name, identification, phone, email, birth_date, status, registration_date, membership_id, photo, fingerprint)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(name, identification, phone, email, birth_date, status || 'Activo', registration_date, membership_id, photo, fingerprint);
-    res.json({ id: info.lastInsertRowid, ...req.body });
+    const id = req.body.id || crypto.randomUUID();
+    const displayName = name || `${names || ''} ${lastNames || ''}`.trim();
+    
+    db.prepare(`
+      INSERT INTO members (
+        id, names, lastNames, name, code, identification_type_id, 
+        identification, isActive, photo, fingerprint, membership_id, 
+        membershipInit, membershipExpired, numberVisits, phone, email, 
+        birth_date, status, registration_date
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, names || '', lastNames || '', displayName, code || '', 
+      identification_type_id || '', identification, isActive !== undefined ? isActive : 1, 
+      photo, fingerprint, membership_id, membershipInit, membershipExpired, 
+      numberVisits || 0, phone, email, birth_date, status || 'Activo', registration_date
+    );
+    res.json({ id, ...req.body, name: displayName });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
 app.put('/api/members/:id', (req, res) => {
-  const { name, identification, phone, email, birth_date, status, registration_date, membership_id, photo, fingerprint } = req.body;
+  const { 
+    name, identification, phone, email, birth_date, status, registration_date, 
+    membership_id, photo, fingerprint, names, lastNames, code, 
+    identification_type_id, isActive, membershipInit, membershipExpired, numberVisits 
+  } = req.body;
+  
   try {
+    const displayName = name || `${names || ''} ${lastNames || ''}`.trim();
+    
     db.prepare(`
       UPDATE members SET 
-        name = ?, identification = ?, phone = ?, email = ?, 
-        birth_date = ?, status = ?, registration_date = ?, membership_id = ?,
-        photo = ?, fingerprint = ?
+        names = ?, lastNames = ?, name = ?, code = ?, 
+        identification_type_id = ?, identification = ?, isActive = ?, 
+        photo = ?, fingerprint = ?, membership_id = ?, 
+        membershipInit = ?, membershipExpired = ?, numberVisits = ?, 
+        phone = ?, email = ?, birth_date = ?, status = ?, registration_date = ?
       WHERE id = ?
-    `).run(name, identification, phone, email, birth_date, status, registration_date, membership_id, photo, fingerprint, req.params.id);
-    res.json({ id: req.params.id, ...req.body });
+    `).run(
+      names || '', lastNames || '', displayName, code || '', 
+      identification_type_id || '', identification, isActive !== undefined ? isActive : 1, 
+      photo, fingerprint, membership_id, membershipInit, membershipExpired, 
+      numberVisits || 0, phone, email, birth_date, status, registration_date, req.params.id
+    );
+    res.json({ id: req.params.id, ...req.body, name: displayName });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
 app.delete('/api/members/:id', (req, res) => {
-  db.prepare('DELETE FROM members WHERE id = ?').run(req.params.id);
-  res.json({ success: true });
+  const memberId = req.params.id;
+  try {
+    const deleteMemberTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM membership_payments WHERE member_id = ?').run(memberId);
+      db.prepare('DELETE FROM members WHERE id = ?').run(memberId);
+    });
+
+    deleteMemberTransaction();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting member:', err);
+    res.status(400).json({ error: err.message });
+  }
 });
+
+// --- EMPLOYEES ---
+app.get('/api/employees', (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+  const search = req.query.search || '';
+
+  const searchPattern = '%' + search + '%';
+  const searchWhere = search ? "WHERE names || ' ' || lastNames LIKE ? OR identification LIKE ?" : '';
+
+  let countQuery = 'SELECT COUNT(*) as count FROM employees';
+  let dataQuery = 'SELECT * FROM employees ' + searchWhere + ' ORDER BY CASE WHEN isActive = 1 THEN 0 ELSE 1 END ASC, names || \' \' || lastNames ASC LIMIT ? OFFSET ?';
+
+  let total, items;
+  if (search) {
+    countQuery += ' ' + searchWhere;
+    total = db.prepare(countQuery).get(searchPattern, searchPattern).count;
+    items = db.prepare(dataQuery).all(searchPattern, searchPattern, limit, offset);
+  } else {
+    total = db.prepare(countQuery).get().count;
+    items = db.prepare(dataQuery).all(limit, offset);
+  }
+
+  res.json({
+    items,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit)
+  });
+});
+
+app.post('/api/employees', (req, res) => {
+  const { 
+    names, lastNames, identification_type_id, identification, phone, 
+    birth_date, charge, isActive, photo, fingerprint, sald 
+  } = req.body;
+  
+  try {
+    const id = req.body.id || crypto.randomUUID();
+    
+    db.prepare(`
+      INSERT INTO employees (
+        id, names, lastNames, identification_type_id, identification, phone, 
+        birth_date, charge, isActive, photo, fingerprint, sald
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, names || '', lastNames || '', identification_type_id || '', identification, phone, 
+      birth_date, charge, isActive !== undefined ? isActive : 1, photo, fingerprint, sald || 0
+    );
+    res.json({ id, ...req.body });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/employees/:id', (req, res) => {
+  const { 
+    names, lastNames, identification_type_id, identification, phone, 
+    birth_date, charge, isActive, photo, fingerprint, sald 
+  } = req.body;
+  
+  try {
+    db.prepare(`
+      UPDATE employees SET 
+        names = ?, lastNames = ?, identification_type_id = ?, identification = ?, 
+        phone = ?, birth_date = ?, charge = ?, isActive = ?, photo = ?, 
+        fingerprint = ?, sald = ?
+      WHERE id = ?
+    `).run(
+      names || '', lastNames || '', identification_type_id || '', identification, 
+      phone, birth_date, charge, isActive !== undefined ? isActive : 1, 
+      photo, fingerprint, sald || 0, req.params.id
+    );
+    res.json({ id: req.params.id, ...req.body });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/employees/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM employees WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Buscar empleado por huella digital verificada
+app.get('/api/employees/by-fingerprint', (req, res) => {
+  const fingerprint = req.query.fingerprint;
+  
+  if (!fingerprint) {
+    return res.status(400).json({ success: false, error: 'Se requiere parámetro fingerprint' });
+  }
+
+  try {
+    if (fingerprint.startsWith('VERIFIED_')) {
+      const employee = db.prepare(`
+        SELECT * FROM employees
+        WHERE fingerprint IS NOT NULL AND fingerprint != '' AND isActive = 1
+        LIMIT 1
+      `).get();
+
+      if (!employee) return res.status(404).json({ success: false, error: 'No hay empleados con huella registrada' });
+      res.json({ success: true, employee, detectionMethod: 'verified' });
+    } else {
+      const employee = db.prepare(`
+        SELECT * FROM employees
+        WHERE fingerprint = ? AND isActive = 1
+      `).get(fingerprint);
+
+      if (!employee) return res.status(404).json({ success: false, error: 'Huella no registrada o empleado inactivo' });
+      res.json({ success: true, employee, detectionMethod: 'exact-match' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // Buscar miembro por huella digital verificada
 // Este endpoint busca el miembro que pasó verificación de huella
@@ -496,7 +749,7 @@ app.get('/api/members/:id/balance', (req, res) => {
   const memberId = req.params.id;
   const member = db.prepare(`
     SELECT m.membership_id, mb.cost, mb.name as membership_name,
-      mp.visits, mp.start_date, mp.end_date
+      COALESCE(mp.visits, mb.number_duration, 0) as visits, mp.start_date, mp.end_date
     FROM members m
     LEFT JOIN memberships mb ON m.membership_id = mb.id
     LEFT JOIN membership_payments mp ON mp.id = (
@@ -658,7 +911,22 @@ app.get('/api/fingerprint/available', async (req, res) => {
   }
 });
 
+// --- PAYROLL REPORT ---
+app.post('/api/payroll-report/send', async (req, res) => {
+  try {
+    const { email } = req.body;
+    await sendPayrollReport(null, email);
+    res.json({ success: true, message: 'Reporte enviado correctamente' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
+
+// Inicializar scheduler de reportes
+schedulePayrollReport();
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);

@@ -1,11 +1,26 @@
 const API_URL = 'https://fh-0ckg.onrender.com/api';
+// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const handleResponse = async (response) => {
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Algo salió mal');
+  const text = await response.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (err) {
+    data = null;
   }
-  return response.json();
+
+  if (!response.ok) {
+    let message = data?.error || data?.message || text || 'Algo salió mal';
+    if (typeof message === 'string' && message.trim().startsWith('<')) {
+      message = response.statusText || `Error del servidor (${response.status})`;
+    }
+    console.error('API error:', response.status, message);
+    throw new Error(message);
+  }
+
+  return data;
 };
 
 export const api = {
@@ -54,14 +69,32 @@ export const api = {
     }).then(handleResponse),
   
   // Teacher Logs
-  getTeacherLogs: () => fetch(`${API_URL}/teacher-logs`).then(handleResponse),
+  getTeacherLogs: (startDate, endDate) => {
+    const params = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+    return fetch(`${API_URL}/teacher-logs${params}`).then(handleResponse);
+  },
   addTeacherLog: (log) => 
     fetch(`${API_URL}/teacher-logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(log)
     }).then(handleResponse),
+  toggleAttendance: (data) =>
+    fetch(`${API_URL}/teacher-logs/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(handleResponse),
   deleteTeacherLog: (id) => fetch(`${API_URL}/teacher-logs/${id}`, { method: 'DELETE' }).then(handleResponse),
+
+  // Employee Schedules
+  getEmployeeSchedules: () => fetch(`${API_URL}/employee-schedules`).then(handleResponse),
+  toggleScheduleSlot: (data) =>
+    fetch(`${API_URL}/employee-schedules/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(handleResponse),
 
   // Expenses
   getExpenses: () => fetch(`${API_URL}/expenses`).then(handleResponse),
@@ -90,7 +123,7 @@ export const api = {
   deleteMembership: (id) => fetch(`${API_URL}/memberships/${id}`, { method: 'DELETE' }).then(handleResponse),
   
   // Members
-  getMembers: (page = 1, limit = 10) => fetch(`${API_URL}/members?page=${page}&limit=${limit}`).then(handleResponse),
+  getMembers: (page = 1, limit = 10, search = '') => fetch(`${API_URL}/members?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`).then(handleResponse),
   addMember: (member) => 
     fetch(`${API_URL}/members`, {
       method: 'POST',
@@ -116,4 +149,20 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payment)
     }).then(handleResponse),
+
+  // Employees
+  getEmployees: (page = 1, limit = 10, search = '') => fetch(`${API_URL}/employees?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`).then(handleResponse),
+  addEmployee: (employee) => 
+    fetch(`${API_URL}/employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(employee)
+    }).then(handleResponse),
+  updateEmployee: (id, employee) => 
+    fetch(`${API_URL}/employees/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(employee)
+    }).then(handleResponse),
+  deleteEmployee: (id) => fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' }).then(handleResponse),
 };

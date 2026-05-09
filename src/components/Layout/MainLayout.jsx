@@ -16,7 +16,7 @@ const MainLayout = ({ children }) => {
         .main-content {
           flex: 1;
           margin-left: 260px;
-          padding: 24px;
+          padding: 32px;
           min-height: 100vh;
         }
         @media (max-width: 768px) {

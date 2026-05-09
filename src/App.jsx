@@ -11,6 +11,7 @@ import MembershipsPage from './pages/MembershipsPage';
 import MembersPage from './pages/MembersPage';
 import MembershipPaymentPage from './pages/MembershipPaymentPage';
 import ReportsPage from './pages/ReportsPage';
+import EmployeesPage from './pages/EmployeesPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -24,90 +25,101 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route 
-        path="/login" 
-        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />} 
+      <Route
+        path="/login"
+        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
       />
-      
-      <Route 
-        path="/" 
+
+      <Route
+        path="/"
         element={
           <ProtectedRoute>
             <DashboardPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      
-      <Route 
-        path="/ventas" 
+
+      <Route
+        path="/ventas"
         element={
           <ProtectedRoute>
             <SalesPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      
-      <Route 
-        path="/inventario" 
+
+      <Route
+        path="/inventario"
         element={
           <ProtectedRoute>
             <InventoryPage />
           </ProtectedRoute>
-        } 
+        }
       />
 
-      <Route 
-        path="/mensualidades" 
+      <Route
+        path="/mensualidades"
         element={
           <ProtectedRoute>
             <MembershipsPage />
           </ProtectedRoute>
-        } 
+        }
       />
 
-      <Route 
-        path="/afiliados" 
+      <Route
+        path="/afiliados"
         element={
           <ProtectedRoute>
             <MembersPage />
           </ProtectedRoute>
-        } 
+        }
       />
 
-      <Route 
-        path="/reportes" 
+      <Route
+        path="/reportes"
         element={
           <ProtectedRoute>
             <ReportsPage />
           </ProtectedRoute>
-        } 
+        }
       />
 
-      <Route 
-        path="/pagos-membresia" 
+      <Route
+        path="/pagos-membresia"
         element={
           <ProtectedRoute>
             <MembershipPaymentPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      
-      <Route 
-        path="/profesores" 
+
+      <Route
+        path="/employee-payments"
         element={
           <ProtectedRoute>
             <TeachersPage />
           </ProtectedRoute>
-        } 
+        }
       />
-      
-      <Route 
-        path="/gastos" 
+
+      <Route
+        path="/empleados"
+        element={
+          <ProtectedRoute>
+            <EmployeesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="/profesores" element={<Navigate to="/employee-payments" replace />} />
+
+      <Route
+        path="/gastos"
         element={
           <ProtectedRoute>
             <ExpensesPage />
           </ProtectedRoute>
-        } 
+        }
       />
 
       <Route path="*" element={<Navigate to="/" replace />} />

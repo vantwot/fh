@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
-import MembersList from '../components/Members/MembersList';
-import MembersForm from '../components/Members/MembersForm';
+import EmployeesList from '../components/Employees/EmployeesList';
+import EmployeesForm from '../components/Employees/EmployeesForm';
 import { UserTick, UserAdd } from 'iconsax-react';
 import { api } from '../utils/api';
 import Modal from '../components/UI/Modal';
 import Alert from '../components/UI/Alert';
 import ConfirmDialog from '../components/UI/ConfirmDialog';
-import { useNavigate } from 'react-router-dom';
 
-const MembersPage = () => {
-  const navigate = useNavigate();
-  const [members, setMembers] = useState([]);
+const EmployeesPage = () => {
+  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,17 +25,17 @@ const MembersPage = () => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   useEffect(() => {
-    fetchMembers(page, searchTerm);
+    fetchEmployees(page, searchTerm);
   }, [page, searchTerm]);
 
-  const fetchMembers = async (p, search = '') => {
+  const fetchEmployees = async (p, search = '') => {
     try {
-      const data = await api.getMembers(p, 10, search);
-      setMembers(data.items);
+      const data = await api.getEmployees(p, 10, search);
+      setEmployees(data.items);
       setTotalPages(data.totalPages);
       setTotalItems(data.total);
     } catch (err) {
-      showAlert('error', 'Error al cargar los afiliados');
+      showAlert('error', 'Error al cargar los empleados');
     } finally {
       setLoading(false);
     }
@@ -50,23 +48,13 @@ const MembersPage = () => {
   const handleSaveItem = async (itemData) => {
     try {
       if (editingItem) {
-        await api.updateMember(editingItem.id, itemData);
-        showAlert('success', 'Afiliado actualizado correctamente');
-        fetchMembers(page);
+        await api.updateEmployee(editingItem.id, itemData);
+        showAlert('success', 'Empleado actualizado correctamente');
       } else {
-        const result = await api.addMember(itemData);
-        showAlert('success', 'Afiliado agregado correctamente. Redirigiendo a pago...');
-        
-        // Wait a bit to show the success message
-        setTimeout(() => {
-          navigate('/pagos-membresia', { 
-            state: { 
-              member: { ...itemData, id: result.id },
-              fromCreation: true 
-            } 
-          });
-        }, 1500);
+        await api.addEmployee(itemData);
+        showAlert('success', 'Empleado agregado correctamente');
       }
+      fetchEmployees(page);
       setIsModalOpen(false);
       setEditingItem(null);
     } catch (err) {
@@ -82,9 +70,9 @@ const MembersPage = () => {
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
     try {
-      await api.deleteMember(itemToDelete);
-      showAlert('success', 'Afiliado eliminado');
-      fetchMembers(page);
+      await api.deleteEmployee(itemToDelete);
+      showAlert('success', 'Empleado eliminado');
+      fetchEmployees(page);
     } catch (err) {
       showAlert('error', 'Error al eliminar: ' + err.message);
     }
@@ -97,22 +85,12 @@ const MembersPage = () => {
     setIsModalOpen(true);
   };
 
-  const handleVisitItem = async (member) => {
-    try {
-      const data = await api.useMemberVisit(member.id);
-      showAlert('success', `Visita registrada para ${member.name}. Visitas restantes: ${data.visitsRemaining}`);
-      fetchMembers(page);
-    } catch (err) {
-      showAlert('error', 'Error al registrar visita: ' + err.message);
-    }
-  };
-
   const handleOpenNewModal = () => {
     setEditingItem(null);
     setIsModalOpen(true);
   };
 
-  if (loading && members.length === 0) return <div className="placeholder">Cargando afiliados...</div>;
+  if (loading && employees.length === 0) return <div className="placeholder">Cargando empleados...</div>;
 
   return (
     <div className="page-container">
@@ -127,20 +105,19 @@ const MembersPage = () => {
       <header className="app-header">
         <h1>
           <UserTick size={32} variant="linear" color="#F2CB05" />
-          Gestión de Afiliados
+          Gestión de Empleados
         </h1>
         <button className="add-main-btn" onClick={handleOpenNewModal}>
           <UserAdd size={24} variant="linear" color="#0D0D0D" />
-          <span>Nuevo Afiliado</span>
+          <span>Nuevo Empleado</span>
         </button>
       </header>
 
       <div className="app-content single-col">
-        <MembersList
-          members={members}
+        <EmployeesList
+          employees={employees}
           onEdit={handleEditItem}
           onDelete={handleDeleteClick}
-          onVisit={handleVisitItem}
           page={page}
           totalPages={totalPages}
           totalItems={totalItems}
@@ -156,9 +133,9 @@ const MembersPage = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingItem ? 'Editar Afiliado' : 'Agregar Nuevo Afiliado'}
+        title={editingItem ? 'Editar Empleado' : 'Agregar Nuevo Empleado'}
       >
-        <MembersForm
+        <EmployeesForm
           onSave={handleSaveItem}
           editingItem={editingItem}
           onCancelEdit={() => setIsModalOpen(false)}
@@ -169,8 +146,8 @@ const MembersPage = () => {
         isOpen={isConfirmOpen}
         onClose={() => setIsConfirmOpen(false)}
         onConfirm={handleConfirmDelete}
-        title="Eliminar Afiliado"
-        message="¿Estás seguro de que deseas eliminar este afiliado? Esta acción no se puede deshacer."
+        title="Eliminar Empleado"
+        message="¿Estás seguro de que deseas eliminar este empleado? Esta acción no se puede deshacer."
       />
 
       <style jsx>{`
@@ -227,4 +204,4 @@ const MembersPage = () => {
   );
 };
 
-export default MembersPage;
+export default EmployeesPage;

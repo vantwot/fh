@@ -63,10 +63,10 @@ const DashboardPage = () => {
     },
     {
       id: 'teachers',
-      title: 'Profesores',
-      description: 'Gestión de instructores',
+      title: 'Empleados',
+      description: 'Gestión de empleados y nómina',
       icon: <Teacher size={48} variant="Bold" color="#F2CB05" />,
-      path: '/profesores',
+      path: '/empleados',
       color: '#FFEAA7'
     },
     {

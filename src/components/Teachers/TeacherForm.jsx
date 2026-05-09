@@ -1,121 +1,116 @@
 import { useState } from 'react';
-import { DISCIPLINES } from '../../constants/teachers';
-import { UserAdd, CalendarAdd, Teacher } from 'iconsax-react';
+import { CalendarAdd, ArrowLeft, ArrowRight } from 'iconsax-react';
 
-const TeacherForm = ({ onAddTeacher, onLogClass, teachers }) => {
-  const [activeTab, setActiveTab] = useState('log'); // 'log' or 'new'
-  const [teacherForm, setTeacherForm] = useState({ name: '', discipline: 'muay_thai', hourlyRate: '' });
-  const [logForm, setLogForm] = useState({ teacherId: '', hours: '', description: '' });
+const getMonday = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = (day + 6) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
-  const handleAddTeacher = (e) => {
-    e.preventDefault();
-    if (!teacherForm.name || !teacherForm.hourlyRate) return;
-    onAddTeacher({
-      id: Date.now(),
-      name: teacherForm.name,
-      disciplines: [teacherForm.discipline],
-      hourlyRate: parseFloat(teacherForm.hourlyRate)
-    });
-    setTeacherForm({ name: '', discipline: 'muay_thai', hourlyRate: '' });
-  };
+const addDays = (date, days) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+};
+
+const formatDate = (date) => {
+  const d = new Date(date);
+  if (Number.isNaN(d)) return date;
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+};
+
+const TeacherForm = ({ onLogClass, teachers }) => {
+  const [weekStart, setWeekStart] = useState(getMonday(new Date()));
+  const [logForm, setLogForm] = useState({ employeeId: '', hours: '', description: '', date: new Date().toISOString().split('T')[0] });
 
   const handleLogClass = (e) => {
     e.preventDefault();
-    if (!logForm.teacherId || !logForm.hours) return;
+    if (!logForm.employeeId || !logForm.hours || !logForm.date) return;
     onLogClass({
       id: Date.now(),
-      teacherId: parseInt(logForm.teacherId),
+      teacherId: parseInt(logForm.employeeId),
       hours: parseFloat(logForm.hours),
       description: logForm.description,
-      date: new Date().toLocaleDateString('es-AR')
+      date: logForm.date
     });
-    setLogForm({ teacherId: '', hours: '', description: '' });
+    setLogForm({ employeeId: '', hours: '', description: '', date: new Date().toISOString().split('T')[0] });
   };
+
+  const weekEnd = addDays(weekStart, 4);
 
   return (
     <div className="sales-form">
-      <div className="category-buttons" style={{ marginBottom: '20px' }}>
-        <button 
-          className={`cat-btn ${activeTab === 'log' ? 'active' : ''}`}
-          onClick={() => setActiveTab('log')}
-        >
-          <CalendarAdd size={18} /> Registrar Clase
-        </button>
-        <button 
-          className={`cat-btn ${activeTab === 'new' ? 'active' : ''}`}
-          onClick={() => setActiveTab('new')}
-        >
-          <UserAdd size={18} /> Nuevo Profesor
-        </button>
-      </div>
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ margin: 0 }}>Registrar Horas Trabajadas</h2>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button type="button" onClick={() => setWeekStart((prev) => addDays(prev, -7))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}>
+              <ArrowLeft size={20} color="#F2CB05" />
+            </button>
+            <span style={{ fontWeight: 700, minWidth: '200px', textAlign: 'center' }}>
+              {formatDate(weekStart)} - {formatDate(weekEnd)}
+            </span>
+            <button type="button" onClick={() => setWeekStart((prev) => addDays(prev, 7))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px' }}>
+              <ArrowRight size={20} color="#F2CB05" />
+            </button>
+          </div>
+        </div>
 
-      {activeTab === 'new' ? (
-        <form onSubmit={handleAddTeacher}>
-          <h2>Registrar Nuevo Profesor</h2>
-          <div className="form-group">
-            <label>Nombre Completo</label>
-            <input 
-              value={teacherForm.name}
-              onChange={(e) => setTeacherForm({...teacherForm, name: e.target.value})}
-              placeholder="Ej: Carlos Ruiz"
-            />
-          </div>
-          <div className="form-group">
-            <label>Disciplina Principal</label>
-            <select 
-              value={teacherForm.discipline}
-              onChange={(e) => setTeacherForm({...teacherForm, discipline: e.target.value})}
-              style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0' }}
-            >
-              {DISCIPLINES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Tarifa por Hora (COP)</label>
-            <input 
-              type="number"
-              value={teacherForm.hourlyRate}
-              onChange={(e) => setTeacherForm({...teacherForm, hourlyRate: e.target.value})}
-              placeholder="0"
-            />
-          </div>
-          <button type="submit" className="submit-btn">Guardar Profesor</button>
-        </form>
-      ) : (
         <form onSubmit={handleLogClass}>
-          <h2>Registrar Horas Trabajadas</h2>
-          <div className="form-group">
-            <label>Seleccionar Profesor</label>
-            <select 
-              value={logForm.teacherId}
-              onChange={(e) => setLogForm({...logForm, teacherId: e.target.value})}
-              style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0' }}
-            >
-              <option value="">Seleccione un profesor</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+          <div className="form-grid-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: '12px', alignItems: 'flex-end' }}>
+            <div className="form-group">
+              <label>Empleado</label>
+              <select 
+                value={logForm.employeeId}
+                onChange={(e) => setLogForm({ ...logForm, employeeId: e.target.value })}
+                style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0', width: '100%' }}
+              >
+                <option value="">Seleccione</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Fecha</label>
+              <input
+                type="date"
+                value={logForm.date}
+                onChange={(e) => setLogForm({ ...logForm, date: e.target.value })}
+                style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0', width: '100%' }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Horas</label>
+              <input 
+                type="number"
+                step="0.5"
+                value={logForm.hours}
+                onChange={(e) => setLogForm({ ...logForm, hours: e.target.value })}
+                placeholder="0"
+                style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0', width: '100%' }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Observación</label>
+              <input 
+                value={logForm.description}
+                onChange={(e) => setLogForm({ ...logForm, description: e.target.value })}
+                placeholder="Ej: Turno mañana"
+                style={{ padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0', width: '100%' }}
+              />
+            </div>
+
+            <button type="submit" className="submit-btn" style={{ padding: '10px 20px', height: 'fit-content' }}>
+              <CalendarAdd size={18} /> Registrar
+            </button>
           </div>
-          <div className="form-group">
-            <label>Horas / Clases</label>
-            <input 
-              type="number"
-              step="0.5"
-              value={logForm.hours}
-              onChange={(e) => setLogForm({...logForm, hours: e.target.value})}
-              placeholder="Ej: 1.5"
-            />
-          </div>
-          <div className="form-group">
-            <label>Descripción / Observación</label>
-            <input 
-              value={logForm.description}
-              onChange={(e) => setLogForm({...logForm, description: e.target.value})}
-              placeholder="Ej: Clase Muay Thai 6pm"
-            />
-          </div>
-          <button type="submit" className="submit-btn">Registrar Horas</button>
         </form>
-      )}
+      </div>
     </div>
   );
 };

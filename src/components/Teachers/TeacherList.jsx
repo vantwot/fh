@@ -1,8 +1,19 @@
 import { Trash, Teacher as TeacherIcon } from 'iconsax-react';
 
 const TeacherList = ({ teachers, logs, onDeleteLog }) => {
-  const getTeacherName = (id) => teachers.find(t => t.id === id)?.name || 'Desconocido';
-  const getTeacherRate = (id) => teachers.find(t => t.id === id)?.hourlyRate || 0;
+  const getTeacherName = (id) => {
+    const teacher = teachers.find(t => t.id === id);
+    return teacher ? `${teacher.names} ${teacher.lastNames}` : 'Desconocido';
+  };
+  
+  const getTeacherRate = (id) => {
+    const teacher = teachers.find(t => t.id === id);
+    return teacher ? parseFloat(teacher.sald) || 0 : 0;
+  };
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return isNaN(date) ? dateString : date.toLocaleDateString('es-AR');
+  };
 
   return (
     <div className="sales-list">
@@ -12,7 +23,7 @@ const TeacherList = ({ teachers, logs, onDeleteLog }) => {
           <thead>
             <tr>
               <th>Fecha</th>
-              <th>Profesor</th>
+              <th>Empleado</th>
               <th>Descripción</th>
               <th style={{ textAlign: 'center' }}>Horas</th>
               <th className="amount-col">Pago</th>
@@ -24,15 +35,15 @@ const TeacherList = ({ teachers, logs, onDeleteLog }) => {
               <tr><td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#aaa' }}>No hay actividades registradas</td></tr>
             ) : (
               logs.map(log => {
-                const rate = getTeacherRate(log.teacherId);
+                const rate = getTeacherRate(log.teacher_id);
                 const payment = log.hours * rate;
                 return (
                   <tr key={log.id}>
-                    <td className="date-col">{log.date}</td>
+                    <td className="date-col">{formatDate(log.date)}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
                         <TeacherIcon size={16} color="#F2B705" />
-                        {getTeacherName(log.teacherId)}
+                        {getTeacherName(log.teacher_id)}
                       </div>
                     </td>
                     <td>{log.description || '—'}</td>

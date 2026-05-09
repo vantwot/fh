@@ -8,7 +8,8 @@ import {
   CardTick,
   UserTick,
   CardPos,
-  Home
+  Home,
+  UserSquare
 } from 'iconsax-react';
 import { useAuth } from '../../context/AuthContext';
 import './Sidebar.css';
@@ -23,9 +24,10 @@ const Sidebar = () => {
     { path: '/inventario', label: 'Inventario', icon: <Box size={24} color="#F2CB05" /> },
     { path: '/mensualidades', label: 'Mensualidades', icon: <CardTick size={24} color="#F2CB05" /> },
     { path: '/afiliados', label: 'Afiliados', icon: <UserTick size={24} color="#F2CB05" /> },
-    { path: '/reportes', label: 'Reportes', icon: <CardTick size={24} color="#F2CB05" /> },
     { path: '/pagos-membresia', label: 'Pagos Membresía', icon: <CardPos size={24} color="#F2CB05" /> },
-    { path: '/profesores', label: 'Profesores', icon: <Teacher size={24} color="#F2CB05" /> },
+    { path: '/employee-payments', label: 'Pagos Empleados', icon: <CardPos size={24} color="#F2CB05" /> },
+    { path: '/empleados', label: 'Empleados', icon: <UserSquare size={24} color="#F2CB05" /> },
+    { path: '/reportes', label: 'Reportes', icon: <CardTick size={24} color="#F2CB05" /> },
     { path: '/gastos', label: 'Gastos', icon: <WalletMoney size={24} color="#F2CB05" /> },
   ];
 

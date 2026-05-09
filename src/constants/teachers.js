@@ -1,12 +1,10 @@
-export const DISCIPLINES = [
-  { value: 'muay_thai', label: 'Muay Thai' },
-  { value: 'boxeo', label: 'Boxeo' },
-  { value: 'karate', label: 'Karate' },
-  { value: 'jiu_jitsu', label: 'Jiu-jitsu' },
-  { value: 'mma', label: 'MMA' },
+export const EMPLOYEE_ROLES = [
+  { value: 'profesor', label: 'Profesor', hourlyRate: 25000 },
+  { value: 'recepcionista', label: 'Recepcionista', hourlyRate: 18000 },
+  { value: 'administrativo', label: 'Administrativo', hourlyRate: 22000 },
 ];
 
-export const TEACHERS_INITIAL_DATA = [
-  { id: 1, name: 'Juan Perez', disciplines: ['muay_thai', 'boxeo'], hourlyRate: 25000 },
-  { id: 2, name: 'Maria Garcia', disciplines: ['jiu_jitsu'], hourlyRate: 30000 },
+export const EMPLOYEES_INITIAL_DATA = [
+  { id: 1, name: 'Juan Perez', role: 'profesor', hourlyRate: 25000 },
+  { id: 2, name: 'Maria Garcia', role: 'recepcionista', hourlyRate: 18000 },
 ];
