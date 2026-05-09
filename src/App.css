@@ -4,6 +4,8 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg-light);
   color: var(--bg-dark);
+  background: var(--bg-light);
+  color: var(--bg-dark);
   min-height: 100vh;
 }
 
@@ -102,9 +104,9 @@ body {
 
 .submit-btn {
   width: 100%;
-  padding: 15px;
-  background: linear-gradient(135deg, var(--primary), var(--primary));
-  color: var(--bg-dark);
+  padding: 13px;
+  background: linear-gradient(135deg, #f7d82f, #f7d82f);
+  color: #020202;
   border: none;
   border-radius: 10px;
   font-size: 1rem;
