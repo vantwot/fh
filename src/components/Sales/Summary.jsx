@@ -73,13 +73,6 @@ export default function Summary({ summary }) {
           </span>
           <span>{summary.mensualidad.toLocaleString('es-AR')} COP</span>
         </div>
-        <div className="category-row">
-          <span className="category-label">
-            <span className="cat-icon">{getCategoryIcon('clase_cortesia')}</span>
-            <span>Clases Cortesía</span>
-          </span>
-          <span>{summary.clase_cortesia.toLocaleString('es-AR')} COP</span>
-        </div>
       </div>
     </div>
   )

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:linux": "vite build && cd server && bun run build:linux",
+    "build:win": "vite build && cd server && bun run build:win"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.3",

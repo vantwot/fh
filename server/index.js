@@ -1,7 +1,8 @@
-require('dotenv').config();
+require('./config');
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const db = require('./db');
 const fingerprint = require('./fingerprint');
 const crypto = require('crypto');
@@ -49,9 +50,8 @@ app.get('/api/sales/summary', (req, res) => {
   const bebida = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM sales WHERE category = 'bebida'").get().total;
   const almacen = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM sales WHERE category IN ('almacen', 'insumo')").get().total;
   const mensualidad = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM sales WHERE category = 'mensualidad'").get().total;
-  const clase_cortesia = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM sales WHERE category = 'clase_cortesia'").get().total;
 
-  res.json({ total, efectivo, transferencia, bebida, almacen, mensualidad, clase_cortesia });
+  res.json({ total, efectivo, transferencia, bebida, almacen, mensualidad });
 });
 
 app.post('/api/sales', (req, res) => {
@@ -259,6 +259,59 @@ app.delete('/api/expenses/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// --- COURTESY CLASSES ---
+app.get('/api/courtesy-classes', (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  const total = db.prepare('SELECT COUNT(*) as count FROM courtesy_classes').get().count;
+  const items = db.prepare('SELECT * FROM courtesy_classes ORDER BY date DESC LIMIT ? OFFSET ?').all(limit, offset);
+
+  res.json({
+    items,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit)
+  });
+});
+
+app.post('/api/courtesy-classes', (req, res) => {
+  const { class_name, student_name, phone, date } = req.body;
+  try {
+    const info = db.prepare(`
+      INSERT INTO courtesy_classes (class_name, student_name, phone, date)
+      VALUES (?, ?, ?, ?)
+    `).run(class_name, student_name, phone, date);
+    res.json({ id: info.lastInsertRowid, ...req.body });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/courtesy-classes/:id', (req, res) => {
+  const { class_name, student_name, phone, date } = req.body;
+  try {
+    db.prepare(`
+      UPDATE courtesy_classes 
+      SET class_name = ?, student_name = ?, phone = ?, date = ?
+      WHERE id = ?
+    `).run(class_name, student_name, phone, date, req.params.id);
+    res.json({ id: req.params.id, ...req.body });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/courtesy-classes/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM courtesy_classes WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // --- MEMBERSHIPS ---
 app.get('/api/memberships', (req, res) => {
   const page = parseInt(req.query.page) || 1;
@@ -329,33 +382,61 @@ app.get('/api/members', (req, res) => {
   const search = req.query.search || '';
 
   const searchPattern = `%${search}%`;
-  const searchWhere = search ? `WHERE COALESCE(m.name, m.names || ' ' || m.lastNames) LIKE ? OR m.identification LIKE ?` : '';
+  const searchWhere = search ? `WHERE (m.name LIKE ? OR m.LastNames LIKE ? OR CAST(m.IdentificationNumber AS TEXT) LIKE ?)` : '';
 
-  let countQuery = 'SELECT COUNT(*) as count FROM members m';
+  let countQuery = 'SELECT COUNT(*) as count FROM Affiliates m';
   let dataQuery = `
-    SELECT m.*, mb.name as membership_name,
+    SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IdentificationTypeId,
+      m.IdentificationNumber, m.IsActive, m.Photo, m.FingerPrint,
+      m.MembershipId as membership_id, m.MembershipInit, m.MembershipExpired, m.NumberVisits,
+      mb.name as membership_name,
+      CASE WHEN m.IsActive = 1 THEN 'Activo' ELSE 'Inactivo' END as status,
       COALESCE(mp.visits, mb.number_duration, 0) as visitsRemaining
-    FROM members m
-    LEFT JOIN memberships mb ON m.membership_id = mb.id
+    FROM Affiliates m
+    LEFT JOIN memberships mb ON m.MembershipId = mb.id
     LEFT JOIN membership_payments mp ON mp.id = (
       SELECT id FROM membership_payments
-      WHERE member_id = m.id AND membership_id = m.membership_id
+      WHERE member_id = m.AffiliateId AND membership_id = m.MembershipId
       ORDER BY date DESC
       LIMIT 1
     )
     ${searchWhere}
-    ORDER BY CASE WHEN m.isActive = 1 THEN 0 ELSE 1 END ASC, COALESCE(m.name, m.names || ' ' || m.lastNames) ASC LIMIT ? OFFSET ?
+    ORDER BY CASE WHEN m.IsActive = 1 THEN 0 ELSE 1 END ASC, m.name ASC LIMIT ? OFFSET ?
   `;
 
   let total, items;
   if (search) {
     countQuery += ' ' + searchWhere;
-    total = db.prepare(countQuery).get(searchPattern, searchPattern).count;
-    items = db.prepare(dataQuery).all(searchPattern, searchPattern, limit, offset);
+    total = db.prepare(countQuery).get(searchPattern, searchPattern, searchPattern).count;
+    items = db.prepare(dataQuery).all(searchPattern, searchPattern, searchPattern, limit, offset);
   } else {
     total = db.prepare(countQuery).get().count;
     items = db.prepare(dataQuery).all(limit, offset);
   }
+
+  // Convert BLOB Photo and FingerPrint to base64 data URLs
+  items = items.map(item => {
+    let photo = item.Photo;
+    let fp = item.FingerPrint;
+
+    if (Buffer.isBuffer(photo)) {
+      photo = 'data:image/jpeg;base64,' + photo.toString('base64');
+    } else if (typeof photo === 'object' && photo !== null) {
+      try { photo = 'data:image/jpeg;base64,' + Buffer.from(photo).toString('base64'); } catch (e) { photo = null; }
+    } else if (typeof photo !== 'string' || (photo && !photo.startsWith('data:'))) {
+      photo = null;
+    }
+
+    if (Buffer.isBuffer(fp)) {
+      fp = fp.toString('base64');
+    } else if (typeof fp === 'object' && fp !== null) {
+      try { fp = Buffer.from(fp).toString('base64'); } catch (e) { fp = null; }
+    } else if (typeof fp !== 'string') {
+      fp = null;
+    }
+
+    return { ...item, Photo: photo, FingerPrint: fp };
+  });
 
   res.json({
     items,
@@ -370,38 +451,38 @@ app.get('/api/reports/summary', (req, res) => {
 
   const activeStats = db.prepare(`
     SELECT COUNT(*) as count
-    FROM members m
+    FROM Affiliates m
     JOIN membership_payments mp ON mp.id = (
       SELECT id FROM membership_payments
-      WHERE member_id = m.id AND membership_id = m.membership_id
+      WHERE member_id = m.AffiliateId AND membership_id = m.MembershipId
       ORDER BY date DESC
       LIMIT 1
     )
-    WHERE m.membership_id IS NOT NULL AND mp.end_date >= ?
+    WHERE m.MembershipId IS NOT NULL AND mp.end_date >= ?
   `).get(today);
 
   const expiredStats = db.prepare(`
     SELECT COUNT(*) as count
-    FROM members m
+    FROM Affiliates m
     JOIN membership_payments mp ON mp.id = (
       SELECT id FROM membership_payments
-      WHERE member_id = m.id AND membership_id = m.membership_id
+      WHERE member_id = m.AffiliateId AND membership_id = m.MembershipId
       ORDER BY date DESC
       LIMIT 1
     )
-    WHERE m.membership_id IS NOT NULL AND mp.end_date < ?
+    WHERE m.MembershipId IS NOT NULL AND mp.end_date < ?
   `).get(today);
 
   const notReturnedStats = db.prepare(`
     SELECT COUNT(*) as count
-    FROM members m
+    FROM Affiliates m
     JOIN membership_payments mp ON mp.id = (
       SELECT id FROM membership_payments
-      WHERE member_id = m.id AND membership_id = m.membership_id
+      WHERE member_id = m.AffiliateId AND membership_id = m.MembershipId
       ORDER BY date DESC
       LIMIT 1
     )
-    WHERE m.membership_id IS NOT NULL AND mp.end_date < ? AND m.status = 'Inactivo'
+    WHERE m.MembershipId IS NOT NULL AND mp.end_date < ? AND m.IsActive = 0
   `).get(today);
 
   const paymentsStats = db.prepare(`
@@ -420,61 +501,90 @@ app.get('/api/reports/summary', (req, res) => {
 
 app.post('/api/members', (req, res) => {
   const { 
-    name, identification, phone, email, birth_date, status, registration_date, 
-    membership_id, photo, fingerprint, names, lastNames, code, 
-    identification_type_id, isActive, membershipInit, membershipExpired, numberVisits 
+    name, LastNames, Code, IdentificationTypeId, IdentificationNumber,
+    IsActive, Photo, FingerPrint, membership_id, MembershipInit,
+    MembershipExpired, NumberVisits
   } = req.body;
   
   try {
     const id = req.body.id || crypto.randomUUID();
-    const displayName = name || `${names || ''} ${lastNames || ''}`.trim();
-    
+
+    // Convert base64 photo/fingerprint to Buffer for BLOB storage
+    let photoToStore = null;
+    if (Photo && typeof Photo === 'string' && Photo.startsWith('data:')) {
+      const b64 = Photo.split(',')[1];
+      if (b64) photoToStore = Buffer.from(b64, 'base64');
+    } else if (Photo && typeof Photo === 'string' && Photo.trim()) {
+      photoToStore = Buffer.from(Photo, 'base64');
+    }
+
+    let fpToStore = null;
+    if (FingerPrint && typeof FingerPrint === 'string' && FingerPrint.trim()) {
+      const b64 = FingerPrint.startsWith('data:') ? FingerPrint.split(',')[1] : FingerPrint;
+      if (b64) fpToStore = Buffer.from(b64, 'base64');
+    }
+
     db.prepare(`
-      INSERT INTO members (
-        id, names, lastNames, name, code, identification_type_id, 
-        identification, isActive, photo, fingerprint, membership_id, 
-        membershipInit, membershipExpired, numberVisits, phone, email, 
-        birth_date, status, registration_date
+      INSERT INTO Affiliates (
+        AffiliateId, Code, name, LastNames, IdentificationTypeId,
+        IdentificationNumber, IsActive, Photo, FingerPrint, MembershipId,
+        MembershipInit, MembershipExpired, NumberVisits
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, names || '', lastNames || '', displayName, code || '', 
-      identification_type_id || '', identification, isActive !== undefined ? isActive : 1, 
-      photo, fingerprint, membership_id, membershipInit, membershipExpired, 
-      numberVisits || 0, phone, email, birth_date, status || 'Activo', registration_date
+      id, Code || '', name || '', LastNames || '', IdentificationTypeId || '',
+      IdentificationNumber || '', IsActive !== undefined ? IsActive : 1,
+      photoToStore, fpToStore, membership_id || null,
+      MembershipInit || null, MembershipExpired || null, NumberVisits || 0
     );
-    res.json({ id, ...req.body, name: displayName });
+
+    res.json({ id, ...req.body });
   } catch (err) {
+    console.error('Error adding affiliate:', err);
     res.status(400).json({ error: err.message });
   }
 });
 
 app.put('/api/members/:id', (req, res) => {
   const { 
-    name, identification, phone, email, birth_date, status, registration_date, 
-    membership_id, photo, fingerprint, names, lastNames, code, 
-    identification_type_id, isActive, membershipInit, membershipExpired, numberVisits 
+    name, LastNames, Code, IdentificationTypeId, IdentificationNumber,
+    IsActive, Photo, FingerPrint, membership_id, MembershipInit,
+    MembershipExpired, NumberVisits
   } = req.body;
   
   try {
-    const displayName = name || `${names || ''} ${lastNames || ''}`.trim();
-    
+    // Convert base64 photo/fingerprint to Buffer for BLOB storage
+    let photoToStore = null;
+    if (Photo && typeof Photo === 'string' && Photo.startsWith('data:')) {
+      const b64 = Photo.split(',')[1];
+      if (b64) photoToStore = Buffer.from(b64, 'base64');
+    } else if (Photo && typeof Photo === 'string' && Photo.trim()) {
+      photoToStore = Buffer.from(Photo, 'base64');
+    }
+
+    let fpToStore = null;
+    if (FingerPrint && typeof FingerPrint === 'string' && FingerPrint.trim()) {
+      const b64 = FingerPrint.startsWith('data:') ? FingerPrint.split(',')[1] : FingerPrint;
+      if (b64) fpToStore = Buffer.from(b64, 'base64');
+    }
+
     db.prepare(`
-      UPDATE members SET 
-        names = ?, lastNames = ?, name = ?, code = ?, 
-        identification_type_id = ?, identification = ?, isActive = ?, 
-        photo = ?, fingerprint = ?, membership_id = ?, 
-        membershipInit = ?, membershipExpired = ?, numberVisits = ?, 
-        phone = ?, email = ?, birth_date = ?, status = ?, registration_date = ?
-      WHERE id = ?
+      UPDATE Affiliates SET 
+        Code = ?, name = ?, LastNames = ?, IdentificationTypeId = ?,
+        IdentificationNumber = ?, IsActive = ?, Photo = ?, FingerPrint = ?,
+        MembershipId = ?, MembershipInit = ?, MembershipExpired = ?, NumberVisits = ?
+      WHERE AffiliateId = ?
     `).run(
-      names || '', lastNames || '', displayName, code || '', 
-      identification_type_id || '', identification, isActive !== undefined ? isActive : 1, 
-      photo, fingerprint, membership_id, membershipInit, membershipExpired, 
-      numberVisits || 0, phone, email, birth_date, status, registration_date, req.params.id
+      Code || '', name || '', LastNames || '', IdentificationTypeId || '',
+      IdentificationNumber || '', IsActive !== undefined ? IsActive : 1,
+      photoToStore, fpToStore, membership_id || null,
+      MembershipInit || null, MembershipExpired || null, NumberVisits || 0,
+      req.params.id
     );
-    res.json({ id: req.params.id, ...req.body, name: displayName });
+
+    res.json({ id: req.params.id, ...req.body });
   } catch (err) {
+    console.error('Error updating affiliate:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -484,13 +594,13 @@ app.delete('/api/members/:id', (req, res) => {
   try {
     const deleteMemberTransaction = db.transaction(() => {
       db.prepare('DELETE FROM membership_payments WHERE member_id = ?').run(memberId);
-      db.prepare('DELETE FROM members WHERE id = ?').run(memberId);
+      db.prepare('DELETE FROM Affiliates WHERE AffiliateId = ?').run(memberId);
     });
 
     deleteMemberTransaction();
     res.json({ success: true });
   } catch (err) {
-    console.error('Error deleting member:', err);
+    console.error('Error deleting affiliate:', err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -630,25 +740,23 @@ app.get('/api/members/by-fingerprint', (req, res) => {
   }
 
   try {
-    // Si el fingerprint comienza con VERIFIED_, significa que la huella fue verificada
-    // En este caso, buscamos el PRIMER miembro activo que tenga fingerprint enrollado
-    // (Asumiendo que típicamente hay un usuario por terminal)
     if (fingerprint.startsWith('VERIFIED_')) {
       const member = db.prepare(`
-        SELECT m.*, mb.name as membership_name 
-        FROM members m
-        LEFT JOIN memberships mb ON m.membership_id = mb.id
-        WHERE m.fingerprint IS NOT NULL 
-        AND m.fingerprint != '' 
-        AND m.status = 'Activo'
-        ORDER BY m.registration_date DESC
+        SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IdentificationTypeId,
+          m.IdentificationNumber, m.IsActive, m.MembershipId as membership_id,
+          m.MembershipInit, m.MembershipExpired, m.NumberVisits,
+          mb.name as membership_name
+        FROM Affiliates m
+        LEFT JOIN memberships mb ON m.MembershipId = mb.id
+        WHERE m.FingerPrint IS NOT NULL AND m.IsActive = 1
+        ORDER BY m.AffiliateId DESC
         LIMIT 1
       `).get();
 
       if (!member) {
         return res.status(404).json({ 
           success: false, 
-          error: 'No hay miembros con huella registrada' 
+          error: 'No hay afiliados con huella registrada' 
         });
       }
 
@@ -658,18 +766,21 @@ app.get('/api/members/by-fingerprint', (req, res) => {
         detectionMethod: 'verified'
       });
     } else {
-      // Para búsquedas antiguas (templates exactos)
       const member = db.prepare(`
-        SELECT m.*, mb.name as membership_name 
-        FROM members m
-        LEFT JOIN memberships mb ON m.membership_id = mb.id
-        WHERE m.fingerprint = ? AND m.status = 'Activo'
-      `).get(fingerprint);
+        SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IdentificationTypeId,
+          m.IdentificationNumber, m.IsActive, m.MembershipId as membership_id,
+          m.MembershipInit, m.MembershipExpired, m.NumberVisits,
+          mb.name as membership_name
+        FROM Affiliates m
+        LEFT JOIN memberships mb ON m.MembershipId = mb.id
+        WHERE m.IsActive = 1
+        LIMIT 1
+      `).get();
 
       if (!member) {
         return res.status(404).json({ 
           success: false, 
-          error: 'Huella no registrada o miembro inactivo' 
+          error: 'Huella no registrada o afiliado inactivo' 
         });
       }
 
@@ -692,13 +803,14 @@ app.post('/api/members/:id/use-visit', (req, res) => {
   const memberId = req.params.id;
 
   try {
-    // Obtener datos del miembro y su membresía
+    // Obtener datos del afiliado y su membresía
     const member = db.prepare(`
-      SELECT m.*, mp.visits, mb.name as membership_name
-      FROM members m
-      LEFT JOIN membership_payments mp ON m.id = mp.member_id AND mp.membership_id = m.membership_id
-      LEFT JOIN memberships mb ON m.membership_id = mb.id
-      WHERE m.id = ? AND m.status = 'Activo'
+      SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IsActive,
+        m.MembershipId as membership_id, mb.name as membership_name, mp.visits
+      FROM Affiliates m
+      LEFT JOIN membership_payments mp ON m.AffiliateId = mp.member_id AND mp.membership_id = m.MembershipId
+      LEFT JOIN memberships mb ON m.MembershipId = mb.id
+      WHERE m.AffiliateId = ? AND m.IsActive = 1
       ORDER BY mp.date DESC
       LIMIT 1
     `).get(memberId);
@@ -725,7 +837,7 @@ app.post('/api/members/:id/use-visit', (req, res) => {
 
     // Si no hay visitas, cambiar estado a inactivo
     if (visitsRemaining <= 0) {
-      db.prepare('UPDATE members SET status = ? WHERE id = ?').run('Inactivo', memberId);
+      db.prepare('UPDATE Affiliates SET IsActive = 0 WHERE AffiliateId = ?').run(memberId);
     }
 
     res.json({ 
@@ -748,17 +860,17 @@ app.post('/api/members/:id/use-visit', (req, res) => {
 app.get('/api/members/:id/balance', (req, res) => {
   const memberId = req.params.id;
   const member = db.prepare(`
-    SELECT m.membership_id, mb.cost, mb.name as membership_name,
+    SELECT m.MembershipId as membership_id, mb.cost, mb.name as membership_name,
       COALESCE(mp.visits, mb.number_duration, 0) as visits, mp.start_date, mp.end_date
-    FROM members m
-    LEFT JOIN memberships mb ON m.membership_id = mb.id
+    FROM Affiliates m
+    LEFT JOIN memberships mb ON m.MembershipId = mb.id
     LEFT JOIN membership_payments mp ON mp.id = (
       SELECT id FROM membership_payments
-      WHERE member_id = m.id AND membership_id = m.membership_id
+      WHERE member_id = m.AffiliateId AND membership_id = m.MembershipId
       ORDER BY date DESC
       LIMIT 1
     )
-    WHERE m.id = ?
+    WHERE m.AffiliateId = ?
   `).get(memberId);
   
   if (!member || !member.membership_id) {
@@ -829,7 +941,7 @@ app.post('/api/membership-payments', (req, res) => {
     // Also record this in the general sales table for accounting
     db.prepare(`
       INSERT INTO sales (date, category, description, amount, payment_method, client_name)
-      SELECT ?, 'mensualidad', 'Pago de membresía', ?, ?, name FROM members WHERE id = ?
+      SELECT ?, 'mensualidad', 'Pago de membresía', ?, ?, name FROM Affiliates WHERE AffiliateId = ?
     `).run(date, amount_paid, payment_method, member_id);
 
     res.json({ id: info.lastInsertRowid, ...req.body });
@@ -879,14 +991,15 @@ app.post('/api/fingerprint/scan', async (req, res) => {
   }
 });
 
-// Endpoint para obtener todos los miembros que tienen fingerprint registrado
+// Endpoint para obtener todos los afiliados que tienen fingerprint registrado
 app.get('/api/members/with-fingerprint', (req, res) => {
   try {
     const members = db.prepare(`
-      SELECT m.*, mb.name as membership_name 
-      FROM members m
-      LEFT JOIN memberships mb ON m.membership_id = mb.id
-      WHERE m.fingerprint IS NOT NULL AND m.fingerprint != '' AND m.status = 'Activo'
+      SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IsActive,
+        m.MembershipId as membership_id, mb.name as membership_name
+      FROM Affiliates m
+      LEFT JOIN memberships mb ON m.MembershipId = mb.id
+      WHERE m.FingerPrint IS NOT NULL AND m.IsActive = 1
     `).all();
 
     res.json({
@@ -927,6 +1040,21 @@ const PORT = process.env.PORT || 3001;
 
 // Inicializar scheduler de reportes
 schedulePayrollReport();
+
+// --- SERVE FRONTEND ---
+// When compiled with bun, __dirname is a virtual /$bunfs/ path.
+// In that case, look for public/ next to the binary on disk.
+const isCompiled = __dirname.startsWith('/$bunfs/');
+const STATIC_DIR = isCompiled
+  ? path.join(path.dirname(process.execPath), 'public')
+  : path.join(__dirname, 'public');
+
+app.use(express.static(STATIC_DIR));
+
+// SPA fallback — serve index.html for any non-API, non-asset route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(STATIC_DIR, 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);

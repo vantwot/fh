@@ -57,26 +57,22 @@ const MemberInfoModal = ({ member, onClose }) => {
       )}
 
       <div className="member-info-modal">
-        {member.photo && (
+        {member.Photo && (
           <div className="member-photo">
-            <img src={member.photo} alt={member.name} />
+            <img src={member.Photo} alt={member.name} />
           </div>
         )}
 
         <div className="member-details">
-          <h2>{member.name}</h2>
+          <h2>{member.name}{member.LastNames ? ` ${member.LastNames}` : ''}</h2>
           <p className="detail">
             <span className="label">Cédula:</span>
-            <span className="value">{member.identification}</span>
-          </p>
-          <p className="detail">
-            <span className="label">Teléfono:</span>
-            <span className="value">{member.phone || 'No registrado'}</span>
+            <span className="value">{member.IdentificationNumber}</span>
           </p>
           <p className="detail">
             <span className="label">Estado:</span>
-            <span className={`status ${member.status?.toLowerCase()}`}>
-              {member.status}
+            <span className={`status ${member.IsActive === 1 ? 'activo' : 'inactivo'}`}>
+              {member.IsActive === 1 ? 'Activo' : 'Inactivo'}
             </span>
           </p>
 

@@ -6,19 +6,17 @@ import { api } from '../../utils/api';
 const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
   const [formData, setFormData] = useState({
     name: '',
-    names: '',
-    lastNames: '',
-    identification: '',
-    identification_type_id: 'Cédula de Ciudadanía',
-    code: '',
-    phone: '',
-    email: '',
-    birth_date: '',
-    status: 'Activo',
+    LastNames: '',
+    IdentificationNumber: '',
+    IdentificationTypeId: 'Cédula de Ciudadanía',
+    Code: '',
+    IsActive: 1,
     membership_id: '',
-    registration_date: new Date().toISOString().split('T')[0],
-    photo: '',
-    fingerprint: ''
+    MembershipInit: '',
+    MembershipExpired: '',
+    NumberVisits: 0,
+    Photo: '',
+    FingerPrint: ''
   });
 
   const [memberships, setMemberships] = useState([]);
@@ -30,11 +28,28 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
   useEffect(() => {
     fetchMemberships();
     if (editingItem) {
+      // Load existing item
       setFormData({
         ...editingItem,
         membership_id: editingItem.membership_id || '',
-        photo: editingItem.photo || '',
-        fingerprint: editingItem.fingerprint || ''
+        Photo: editingItem.Photo || '',
+        FingerPrint: editingItem.FingerPrint || ''
+      });
+    } else {
+      // Reset for new item
+      setFormData({
+        name: '',
+        LastNames: '',
+        IdentificationNumber: '',
+        IdentificationTypeId: 'Cédula de Ciudadanía',
+        Code: '',
+        IsActive: 1,
+        membership_id: '',
+        MembershipInit: '',
+        MembershipExpired: '',
+        NumberVisits: 0,
+        Photo: '',
+        FingerPrint: ''
       });
     }
   }, [editingItem]);
@@ -72,11 +87,16 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
     const canvas = canvasRef.current;
     if (video && canvas) {
       const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      // Set canvas to a reasonable size to reduce file size
+      const maxWidth = 480;
+      const maxHeight = 480;
+      const scale = Math.min(maxWidth / video.videoWidth, maxHeight / video.videoHeight);
+      canvas.width = video.videoWidth * scale;
+      canvas.height = video.videoHeight * scale;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const photoData = canvas.toDataURL('image/webp');
-      setFormData(prev => ({ ...prev, photo: photoData }));
+      // Use JPEG with compression quality 0.7 for smaller file size
+      const photoData = canvas.toDataURL('image/jpeg', 0.7);
+      setFormData(prev => ({ ...prev, Photo: photoData }));
       stopCamera();
     }
   };
@@ -111,7 +131,7 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
       if (data.fingerprint || data.template) {
         setFormData(prev => ({ 
           ...prev, 
-          fingerprint: data.fingerprint || data.template 
+          FingerPrint: data.fingerprint || data.template 
         }));
       } else {
         throw new Error('No se obtuvo datos de huella');
@@ -134,10 +154,10 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
     <form className="modal-form" onSubmit={handleSubmit}>
       <div className="bio-section">
         <div className="photo-container">
-          {formData.photo ? (
+          {formData.Photo ? (
             <div className="captured-photo">
-              <img src={formData.photo} alt="Member" />
-              <button type="button" className="remove-photo" onClick={() => setFormData(prev => ({ ...prev, photo: '' }))}>
+              <img src={formData.Photo} alt="Member" />
+              <button type="button" className="remove-photo" onClick={() => setFormData(prev => ({ ...prev, Photo: '' }))}>
                 <Trash size={16} variant="Bold" />
               </button>
             </div>
@@ -157,17 +177,17 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
         </div>
 
         <div className="fingerprint-container">
-          <div className={`finger-box ${formData.fingerprint ? 'success' : ''} ${isReadingFingerprint ? 'scanning' : ''}`} onClick={!formData.fingerprint ? handleFingerprint : null}>
+          <div className={`finger-box ${formData.FingerPrint ? 'success' : ''} ${isReadingFingerprint ? 'scanning' : ''}`} onClick={!formData.FingerPrint ? handleFingerprint : null}>
             {isReadingFingerprint ? (
               <div className="scan-animation">
                 <FingerScan size={40} variant="linear" color="var(--primary)" />
                 <div className="scan-line" />
               </div>
-            ) : formData.fingerprint ? (
+            ) : formData.FingerPrint ? (
               <>
                 <TickCircle size={40} variant="Bold" color="#4caf50" />
                 <span className="fp-status">Huella Registrada</span>
-                <button type="button" className="reset-fp" onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, fingerprint: '' })); }}>
+                <button type="button" className="reset-fp" onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, FingerPrint: '' })); }}>
                   Reiniciar
                 </button>
               </>
@@ -186,8 +206,8 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
           <label>Nombres</label>
           <input
             type="text"
-            name="names"
-            value={formData.names}
+            name="name"
+            value={formData.name}
             onChange={handleChange}
             placeholder="Ej: Juan"
             required
@@ -197,8 +217,8 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
           <label>Apellidos</label>
           <input
             type="text"
-            name="lastNames"
-            value={formData.lastNames}
+            name="LastNames"
+            value={formData.LastNames}
             onChange={handleChange}
             placeholder="Ej: Pérez"
           />
@@ -210,15 +230,15 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
           <label>Código Interno</label>
           <input
             type="text"
-            name="code"
-            value={formData.code}
+            name="Code"
+            value={formData.Code}
             onChange={handleChange}
             placeholder="Código del sistema"
           />
         </div>
         <div className="form-group" style={{ flex: 1 }}>
           <label>Tipo de Documento</label>
-          <select name="identification_type_id" value={formData.identification_type_id} onChange={handleChange}>
+          <select name="IdentificationTypeId" value={formData.IdentificationTypeId} onChange={handleChange}>
             <option value="Cédula de Ciudadanía">Cédula de Ciudadanía</option>
             <option value="Tarjeta de Identidad">Tarjeta de Identidad</option>
             <option value="Cédula de Extranjería">Cédula de Extranjería</option>
@@ -232,8 +252,8 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
           <label>Identificación / Cédula</label>
           <input
             type="text"
-            name="identification"
-            value={formData.identification}
+            name="IdentificationNumber"
+            value={formData.IdentificationNumber}
             onChange={handleChange}
             placeholder="Documento de identidad"
             required
@@ -241,26 +261,15 @@ const MembersForm = ({ onSave, editingItem, onCancelEdit }) => {
         </div>
 
         <div className="form-group" style={{ flex: 1 }}>
-          <label>Teléfono</label>
-          <input
-            type="text"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            placeholder="300 000 0000"
-          />
+          <label>Estado</label>
+          <select name="IsActive" value={formData.IsActive} onChange={(e) => setFormData(prev => ({ ...prev, IsActive: parseInt(e.target.value) }))}>
+            <option value={1}>Activo</option>
+            <option value={0}>Inactivo</option>
+          </select>
         </div>
       </div>
 
       <div className="form-row">
-        <div className="form-group" style={{ flex: 1 }}>
-          <label>Estado</label>
-          <select name="status" value={formData.status} onChange={handleChange}>
-            <option value="Activo">Activo</option>
-            <option value="Inactivo">Inactivo</option>
-          </select>
-        </div>
-
         <div className="form-group" style={{ flex: 1 }}>
           <label>Membresía Actual</label>
           <select name="membership_id" value={formData.membership_id} onChange={handleChange}>

@@ -1,5 +1,5 @@
-const API_URL = 'https://fh-0ckg.onrender.com/api';
-// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// const API_URL = 'https://fh-0ckg.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
 
 const handleResponse = async (response) => {
   const text = await response.text();
@@ -165,4 +165,20 @@ export const api = {
       body: JSON.stringify(employee)
     }).then(handleResponse),
   deleteEmployee: (id) => fetch(`${API_URL}/employees/${id}`, { method: 'DELETE' }).then(handleResponse),
+
+  // Courtesy Classes
+  getCourtesyClasses: (page = 1, limit = 10) => fetch(`${API_URL}/courtesy-classes?page=${page}&limit=${limit}`).then(handleResponse),
+  addCourtesyClass: (courtesyClass) => 
+    fetch(`${API_URL}/courtesy-classes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(courtesyClass)
+    }).then(handleResponse),
+  updateCourtesyClass: (id, courtesyClass) => 
+    fetch(`${API_URL}/courtesy-classes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(courtesyClass)
+    }).then(handleResponse),
+  deleteCourtesyClass: (id) => fetch(`${API_URL}/courtesy-classes/${id}`, { method: 'DELETE' }).then(handleResponse),
 };

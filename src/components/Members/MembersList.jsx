@@ -34,7 +34,6 @@ const MembersList = ({ members, onEdit, onDelete, onVisit, page, totalPages, tot
               <th style={{ width: '50px' }}></th>
               <th>Nombre</th>
               <th>Identificación</th>
-              <th>Teléfono</th>
               <th style={{ textAlign: 'center' }}>Huella</th>
               <th>Membresía</th>
               <th style={{ textAlign: 'center' }}>Visitas</th>
@@ -45,7 +44,7 @@ const MembersList = ({ members, onEdit, onDelete, onVisit, page, totalPages, tot
           <tbody>
             {members.length > 0 ? (
               members.map(m => {
-                const isActive = m.status === 'Activo';
+                const isActive = m.IsActive === 1;
                 return (
                   <tr key={m.id}>
                     <td>
@@ -59,18 +58,17 @@ const MembersList = ({ members, onEdit, onDelete, onVisit, page, totalPages, tot
                         justifyContent: 'center',
                         overflow: 'hidden'
                       }}>
-                        {m.photo ? (
-                          <img src={m.photo} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        {m.Photo && typeof m.Photo === 'string' && m.Photo.length > 0 ? (
+                          <img src={m.Photo} alt={m.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
                         ) : (
                           <User size={20} variant="linear" color="#F2CB05" />
                         )}
                       </div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{m.name}</td>
-                    <td>{m.identification || '—'}</td>
-                    <td>{m.phone || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{m.name}{m.LastNames ? ` ${m.LastNames}` : ''}</td>
+                    <td>{m.IdentificationNumber || '—'}</td>
                     <td style={{ textAlign: 'center' }}>
-                      {m.fingerprint ? (
+                      {m.FingerPrint ? (
                         <FingerScan size={20} variant="Bold" color="#4caf50" title="Huella Registrada" />
                       ) : (
                         <FingerScan size={20} variant="linear" color="#ccc" title="Sin Huella" />

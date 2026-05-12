@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "build:linux": "bun build ./index.js --compile --target=bun-linux-x64 --outfile fh-linux",
+    "build:win": "bun build ./index.js --compile --target=bun-windows-x64 --outfile fh.exe"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",

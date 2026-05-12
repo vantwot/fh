@@ -12,6 +12,7 @@ import MembersPage from './pages/MembersPage';
 import MembershipPaymentPage from './pages/MembershipPaymentPage';
 import ReportsPage from './pages/ReportsPage';
 import EmployeesPage from './pages/EmployeesPage';
+import CourtesyClassesPage from './pages/CourtesyClassesPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -89,6 +90,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <MembershipPaymentPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/cortesia"
+        element={
+          <ProtectedRoute>
+            <CourtesyClassesPage />
           </ProtectedRoute>
         }
       />

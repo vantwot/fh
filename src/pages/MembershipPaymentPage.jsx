@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MoneyTick, ArrowLeft, Receipt2, SearchNormal1, User, Calendar, DirectboxSend, TickCircle, Clock } from 'iconsax-react';
 import { api } from '../utils/api';
@@ -9,6 +9,7 @@ const MembershipPaymentPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { member: initialMember } = location.state || {};
+  const fetchedRef = useRef(false);
 
   const [memberships, setMemberships] = useState([]);
   const [members, setMembers] = useState([]);
@@ -36,7 +37,10 @@ const MembershipPaymentPage = () => {
   });
 
   useEffect(() => {
-    fetchInitialData();
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchInitialData();
+    }
   }, []);
 
   const calculateNextMonthEnd = (dateString) => {

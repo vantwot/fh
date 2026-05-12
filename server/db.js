@@ -1,9 +1,9 @@
-const Database = require('better-sqlite3');
+const { Database } = require('bun:sqlite');
 const path = require('path');
 
 const db = new Database(path.join(__dirname, 'database.sqlite'));
 
-db.pragma('foreign_keys = ON');
+db.exec('PRAGMA foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -59,6 +59,14 @@ db.exec(`
     date TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS courtesy_classes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_name TEXT NOT NULL,
+    student_name TEXT NOT NULL,
+    phone TEXT,
+    date TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS memberships (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -90,25 +98,18 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS members (
     id TEXT PRIMARY KEY, -- AffiliateId
-    code TEXT,
-    names TEXT NOT NULL,
-    lastNames TEXT,
-    identification_type_id TEXT,
-    identification TEXT,
-    isActive INTEGER DEFAULT 1,
-    photo TEXT,
-    fingerprint TEXT,
-    membership_id TEXT,
-    membershipInit TEXT,
-    membershipExpired TEXT,
-    numberVisits INTEGER,
-    -- Existing columns for compatibility
+    Code TEXT,
     name TEXT,
-    phone TEXT,
-    email TEXT,
-    birth_date TEXT,
-    status TEXT DEFAULT 'Activo',
-    registration_date TEXT,
+    LastNames TEXT,
+    IdentificationTypeId TEXT,
+    IdentificationNumber TEXT NOT NULL,
+    IsActive INTEGER DEFAULT 1,
+    Photo TEXT,
+    FingerPrint TEXT,
+    membership_id TEXT,
+    MembershipInit TEXT,
+    MembershipExpired TEXT,
+    NumberVisits INTEGER DEFAULT 0,
     FOREIGN KEY (membership_id) REFERENCES memberships(id)
   );
 
@@ -203,6 +204,100 @@ const hasHourSlot = tlCols.some(c => c.name === 'hour_slot');
 if (!hasHourSlot) {
   db.exec('ALTER TABLE teacher_logs ADD COLUMN hour_slot INTEGER');
   console.log('Migration: added hour_slot column to teacher_logs');
+}
+
+// Migration: convert Photo and FingerPrint columns in members from BLOB to TEXT
+try {
+  const membersCols = db.prepare("SELECT name, type FROM pragma_table_info('members')").all();
+  const photoCol = membersCols.find(c => c.name === 'Photo');
+  
+  if (photoCol && photoCol.type.toLowerCase() === 'blob') {
+    console.log('Migration: Converting Photo column from BLOB to TEXT and cleaning old data...');
+    db.exec(`
+      CREATE TABLE members_backup AS SELECT * FROM members;
+      DROP TABLE members;
+      CREATE TABLE members (
+        id TEXT PRIMARY KEY,
+        Code TEXT,
+        name TEXT,
+        LastNames TEXT,
+        IdentificationTypeId TEXT,
+        IdentificationNumber TEXT NOT NULL,
+        IsActive INTEGER DEFAULT 1,
+        Photo TEXT,
+        FingerPrint TEXT,
+        membership_id TEXT,
+        MembershipInit TEXT,
+        MembershipExpired TEXT,
+        NumberVisits INTEGER DEFAULT 0,
+        FOREIGN KEY (membership_id) REFERENCES memberships(id)
+      );
+      INSERT INTO members (id, Code, name, LastNames, IdentificationTypeId, IdentificationNumber, IsActive, Photo, FingerPrint, membership_id, MembershipInit, MembershipExpired, NumberVisits)
+      SELECT id, Code, name, LastNames, IdentificationTypeId, IdentificationNumber, IsActive, NULL, NULL, membership_id, MembershipInit, MembershipExpired, NumberVisits FROM members_backup;
+      DROP TABLE members_backup;
+    `);
+    console.log('Migration: Photo and FingerPrint columns converted to TEXT and old BLOB data cleared');
+  }
+} catch (e) {
+  console.warn('Migration warning for members table Photo column:', e.message);
+}
+
+// Migration: remove member_id FK from membership_payments (now references Affiliates, not members)
+try {
+  const mpInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='membership_payments'").get();
+  if (mpInfo && mpInfo.sql.includes('REFERENCES members')) {
+    db.exec(`
+      CREATE TABLE membership_payments_backup AS SELECT * FROM membership_payments;
+      DROP TABLE membership_payments;
+      CREATE TABLE membership_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id TEXT NOT NULL,
+        membership_id TEXT NOT NULL,
+        total_value REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        registration_fee REAL DEFAULT 0,
+        amount_paid REAL NOT NULL,
+        payment_method TEXT NOT NULL,
+        observation TEXT,
+        date TEXT NOT NULL,
+        start_date TEXT,
+        end_date TEXT,
+        visits INTEGER,
+        FOREIGN KEY (membership_id) REFERENCES memberships(id)
+      );
+      INSERT INTO membership_payments SELECT * FROM membership_payments_backup;
+      DROP TABLE membership_payments_backup;
+    `);
+    console.log('Migration: removed member_id FK from membership_payments (now uses Affiliates)');
+  }
+} catch (e) {
+  console.warn('Migration warning for membership_payments:', e.message);
+}
+
+// Migration: recreate courtesy_classes without observation column
+try {
+  const ccCols = db.prepare("SELECT name FROM pragma_table_info('courtesy_classes')").all();
+  const hasObservation = ccCols.some(c => c.name === 'observation');
+  
+  if (hasObservation) {
+    console.log('Migration: Removing observation column from courtesy_classes...');
+    db.exec(`
+      CREATE TABLE courtesy_classes_backup AS SELECT id, class_name, student_name, phone, date FROM courtesy_classes;
+      DROP TABLE courtesy_classes;
+      CREATE TABLE courtesy_classes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_name TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        phone TEXT,
+        date TEXT NOT NULL
+      );
+      INSERT INTO courtesy_classes SELECT id, class_name, student_name, phone, date FROM courtesy_classes_backup;
+      DROP TABLE courtesy_classes_backup;
+    `);
+    console.log('Migration: courtesy_classes table updated successfully');
+  }
+} catch (e) {
+  console.warn('Migration warning for courtesy_classes:', e.message);
 }
 
 // Insert default admin if not exists

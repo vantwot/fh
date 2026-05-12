@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 env
+server/fh-linux
+server/fh.exe
+/server/public

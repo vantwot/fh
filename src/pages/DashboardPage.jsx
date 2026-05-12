@@ -22,6 +22,14 @@ const DashboardPage = () => {
       color: '#4ECDC4'
     },
     {
+      id: 'courtesy-classes',
+      title: 'Cortesías',
+      description: 'Registrar clases de cortesía',
+      icon: <CardTick size={48} variant="Bold" color="#F2CB05" />,
+      path: '/cortesia',
+      color: '#FF6B6B'
+    },
+    {
       id: 'inventory',
       title: 'Inventario',
       description: 'Control de existencias',
