@@ -27,3 +27,4 @@ env
 server/fh-linux
 server/fh.exe
 /server/public
+/server/fh-app
