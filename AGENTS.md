@@ -6,9 +6,11 @@
 - One SQLite DB at `server/database.sqlite` (path is `__dirname`-relative, not cwd).
 
 ## Run (non-obvious)
+- **Always use Bun for dependencies and scripts** (both root and `server/`): `bun install`, `bun run <script>`. Do **not** use npm: on this Windows setup npm corrupts optional native deps (`@rolldown/binding-*` breaks Vite) and `better-sqlite3`'s postinstall fails.
 - Backend **must run with Bun, not Node**: `server/db.js` starts with `require('bun:sqlite')`, so `node index.js` fails.
-  - `cd server && bun index.js`
-- Frontend: `npm run dev` (Vite, port 5173). Dev API base is hardcoded to `http://localhost:3001/api` in `src/utils/api.js` unless `VITE_API_URL` is set.
+  - `cd server && bun install --ignore-scripts && bun index.js`
+  - `--ignore-scripts` is required because `better-sqlite3` (only used by the one-off import scripts) tries to compile with node-gyp. The runtime uses `bun:sqlite`, so it is not needed.
+- Frontend: `bun install` then `bun run dev` (Vite, port 5173). Dev API base is hardcoded to `http://localhost:3001/api` in `src/utils/api.js` unless `VITE_API_URL` is set.
 - Login is `POST /api/login`; seeded users `admin` / `fh2026` and `mariana` / `fh2026` (plaintext passwords in `users`).
 
 ## Fingerprint subsystem (high-risk, easy to break)
@@ -26,10 +28,10 @@
 - Known non-fatal warning at startup: `membership_payments` migration (13 vs 15 columns) leaves a `membership_payments_backup` table; the server still runs.
 
 ## Build / packaging
-- Root: `npm run build` (Vite), `npm run build:win` / `build:linux` (Vite build + `bun build --compile` in `server/`).
+- Root: `bun run build` (Vite), `bun run build:win` / `build:linux` (Vite build + `bun build --compile` in `server/`).
 - Compiled `fh.exe` serves `server/public/` and opens `http://localhost:3001`.
 - `server/config.js` loads `.env` from the process cwd, then falls back to hardcoded email credentials. Do not commit new real secrets.
 
 ## Conventions / checks
-- Lint: `npm run lint` (ESLint). No test suite is configured.
+- Lint: `bun run lint` (ESLint). No test suite is configured.
 - UI text and most identifiers are Spanish; keep new user-facing strings in Spanish.
