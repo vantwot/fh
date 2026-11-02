@@ -951,33 +951,101 @@ app.post('/api/membership-payments', (req, res) => {
 });
 
 // --- FINGERPRINT ---
+function toFmdBase64(raw) {
+  if (!raw) return null;
+  let buf = null;
+  if (Buffer.isBuffer(raw) || raw instanceof Uint8Array) {
+    buf = Buffer.from(raw);
+  } else if (typeof raw === 'string') {
+    const s = raw.startsWith('data:') ? raw.split(',')[1] : raw;
+    if (!s || s.startsWith('VERIFIED_')) return null;
+    try {
+      buf = Buffer.from(s, 'base64');
+    } catch (_) {
+      return null;
+    }
+  }
+  if (!buf || buf.length < 8) return null;
+  // Rechazar IDs falsos guardados como texto (formato antiguo)
+  if (buf.length >= 9 && buf.toString('ascii', 0, 9) === 'VERIFIED_') return null;
+  return buf.toString('base64');
+}
+
+function collectFingerprintTemplates() {
+  const memberTemplates = db.prepare(`
+    SELECT AffiliateId as id, FingerPrint as fp
+    FROM Affiliates
+    WHERE FingerPrint IS NOT NULL AND IsActive = 1
+  `).all();
+  const employeeTemplates = db.prepare(`
+    SELECT id, fingerprint as fp
+    FROM employees
+    WHERE fingerprint IS NOT NULL AND fingerprint != '' AND isActive = 1
+  `).all();
+
+  const templates = [];
+  for (const m of memberTemplates) {
+    const fmd = toFmdBase64(m.fp);
+    if (fmd) templates.push({ id: `member:${m.id}`, fmd });
+  }
+  for (const e of employeeTemplates) {
+    const fmd = toFmdBase64(e.fp);
+    if (fmd) templates.push({ id: `employee:${e.id}`, fmd });
+  }
+  return templates;
+}
+
+function lookupFingerprintMatch(matchedId) {
+  const [type, id] = String(matchedId || '').split(':');
+
+  if (type === 'employee') {
+    const employee = db.prepare('SELECT * FROM employees WHERE id = ? AND isActive = 1').get(id);
+    if (!employee) return { error: 'Empleado no encontrado o inactivo' };
+    return { employee };
+  }
+
+  if (type === 'member') {
+    const member = db.prepare(`
+      SELECT m.AffiliateId as id, m.Code, m.name, m.LastNames, m.IdentificationTypeId,
+        m.IdentificationNumber, m.IsActive, m.MembershipId as membership_id,
+        m.MembershipInit, m.MembershipExpired, m.NumberVisits, m.Photo,
+        mb.name as membership_name
+      FROM Affiliates m
+      LEFT JOIN memberships mb ON m.MembershipId = mb.id
+      WHERE m.AffiliateId = ? AND m.IsActive = 1
+    `).get(id);
+    if (!member) return { error: 'Afiliado no encontrado o inactivo' };
+    if (Buffer.isBuffer(member.Photo)) {
+      member.Photo = 'data:image/jpeg;base64,' + member.Photo.toString('base64');
+    } else if (member.Photo && typeof member.Photo !== 'string') {
+      member.Photo = null;
+    }
+    return { member };
+  }
+
+  return { error: 'Huella no registrada' };
+}
+
 app.post('/api/fingerprint/scan', async (req, res) => {
   try {
     console.log('Solicitando lectura de huella digital...');
-    const result = await fingerprint.readFingerprint();
-    
-    if (result === 'verified') {
-      // La huella coincidió con la enrollada
-      // Retornamos un ID único combinando timestamp + usuario actual
-      // Esto nos permite buscar después en la base de datos
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 8);
-      const fingerprintId = `VERIFIED_${timestamp}_${random}`;
-      
-      console.log('Huella verificada exitosamente:', fingerprintId);
-      res.json({ 
-        fingerprint: fingerprintId,
-        template: fingerprintId,
+    const result = await fingerprint.enrollFingerprint();
+
+    if (result.success && result.fmd) {
+      console.log('Huella capturada (template FMD)');
+      res.json({
+        fingerprint: result.fmd,
+        template: result.fmd,
         success: true,
         verified: true
       });
     } else {
-      // No se detectó huella o no coincidió
       res.json({
         fingerprint: null,
         template: null,
         success: false,
-        verified: false
+        verified: false,
+        error: result.error || 'No se detecto huella o no se pudo crear la plantilla'
       });
     }
   } catch (err) {
@@ -988,6 +1056,121 @@ app.post('/api/fingerprint/scan', async (req, res) => {
       verified: false,
       error: err.message
     });
+  }
+});
+
+app.post('/api/fingerprint/identify', async (req, res) => {
+  try {
+    const templates = collectFingerprintTemplates();
+    if (templates.length === 0) {
+      return res.json({ success: false, error: 'No hay huellas registradas en el sistema' });
+    }
+
+    const result = await fingerprint.identifyFingerprint(templates);
+    if (!result.success || !result.matchedId) {
+      return res.json({
+        success: false,
+        matchedId: null,
+        error: result.error || 'Huella no registrada',
+        compared: result.compared || 0
+      });
+    }
+
+    const found = lookupFingerprintMatch(result.matchedId);
+    if (found.error) {
+      return res.json({ success: false, matchedId: null, error: found.error });
+    }
+
+    return res.json({
+      success: true,
+      matchedId: result.matchedId,
+      ...(found.member ? { member: found.member } : { employee: found.employee })
+    });
+  } catch (err) {
+    console.error('Error en identificación por huella:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/fingerprint/auto-identify', async (req, res) => {
+  const controller = new AbortController();
+  req.on('close', () => controller.abort());
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (obj) => {
+    try {
+      res.write(JSON.stringify(obj) + '\n');
+    } catch (_) {}
+  };
+
+  try {
+    const maxWait = Math.min(parseInt(req.query.maxWait || '30000', 10) || 30000, 60000);
+    const templates = collectFingerprintTemplates();
+    if (templates.length === 0) {
+      send({ phase: 'result', success: false, error: 'No hay huellas registradas en el sistema' });
+      return res.end();
+    }
+
+    const result = await fingerprint.autoIdentifyFingerprint(templates, maxWait, controller.signal, (evt) => {
+      if (evt.phase === 'reading' || evt.phase === 'idle') send({ phase: evt.phase });
+    });
+
+    if (!result || !result.success) {
+      send({ phase: 'result', success: false, error: (result && result.error) || 'Sin respuesta del lector de huellas' });
+      return res.end();
+    }
+    if (!result.fingerPresent) {
+      send({ phase: 'result', success: true, fingerPresent: false });
+      return res.end();
+    }
+    if (!result.matchedId) {
+      send({ phase: 'result', success: false, fingerPresent: true, error: 'Huella no registrada' });
+      return res.end();
+    }
+
+    const found = lookupFingerprintMatch(result.matchedId);
+    if (found.error) {
+      send({ phase: 'result', success: false, fingerPresent: true, error: found.error });
+      return res.end();
+    }
+
+    send({
+      phase: 'result',
+      success: true,
+      fingerPresent: true,
+      matchedId: result.matchedId,
+      ...(found.member ? { member: found.member } : { employee: found.employee })
+    });
+    res.end();
+  } catch (err) {
+    console.error('Error en auto-identify:', err);
+    send({ phase: 'result', success: false, error: err.message });
+    res.end();
+  }
+});
+
+app.get('/api/fingerprint/status', async (req, res) => {
+  try {
+    const status = await fingerprint.getFingerprintStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ success: false, fingerPresent: false, error: err.message });
+  }
+});
+
+app.get('/api/fingerprint/wait', async (req, res) => {
+  const controller = new AbortController();
+  req.on('close', () => controller.abort());
+  try {
+    const maxWait = Math.min(parseInt(req.query.maxWait || '30000', 10) || 30000, 60000);
+    const status = await fingerprint.waitFingerprint(maxWait, controller.signal);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ success: false, fingerPresent: false, error: err.message });
   }
 });
 
