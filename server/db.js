@@ -113,6 +113,22 @@ db.exec(`
     FOREIGN KEY (membership_id) REFERENCES memberships(id)
   );
 
+  CREATE TABLE IF NOT EXISTS Affiliates (
+    AffiliateId TEXT PRIMARY KEY,
+    Code TEXT,
+    name TEXT,
+    LastNames TEXT,
+    IdentificationTypeId TEXT,
+    IdentificationNumber TEXT,
+    IsActive INTEGER DEFAULT 1,
+    Photo BLOB,
+    FingerPrint BLOB,
+    MembershipId TEXT,
+    MembershipInit TEXT,
+    MembershipExpired TEXT,
+    NumberVisits INTEGER DEFAULT 0
+  );
+
   CREATE TABLE IF NOT EXISTS employees (
     id TEXT PRIMARY KEY, -- EmployeeId
     names TEXT NOT NULL,
