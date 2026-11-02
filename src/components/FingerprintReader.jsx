@@ -1,105 +1,101 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 const FingerprintReader = ({ onMemberDetected }) => {
-  const isActivatedRef = useRef(false);
+  const onDetectedRef = useRef(onMemberDetected);
   const scanInProgressRef = useRef(false);
+  const stoppedRef = useRef(false);
+  const abortRef = useRef(null);
+  const lastDetectedRef = useRef({ id: null, at: 0 });
 
+  // Mantener la referencia al callback sin reiniciar el bucle en cada render
   useEffect(() => {
-    // Monitorear tecla ENTER o activar desde otro lado
-    const handleKeyPress = async (e) => {
-      // Activar escaneo con tecla ENTER
-      if (e.key === 'Enter' && !scanInProgressRef.current) {
-        await attemptFingerprintScan();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-
-    // Detectar cuando el usuario toca el área del sensor (cada 5 segundos máximo)
-    const slowScanInterval = setInterval(() => {
-      // Solo intenta si pasó suficiente tiempo y no hay escaneo en progreso
-      if (!scanInProgressRef.current && isActivatedRef.current) {
-        attemptFingerprintScan();
-      }
-    }, 5000); // Cada 5 segundos, no cada 2 segundos
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-      clearInterval(slowScanInterval);
-    };
+    onDetectedRef.current = onMemberDetected;
   }, [onMemberDetected]);
 
-  const attemptFingerprintScan = async () => {
-    if (scanInProgressRef.current) return;
-
-    scanInProgressRef.current = true;
-
-    try {
-      console.log('Intentando leer huella...');
-      
-      const fingerprintResponse = await fetch('http://localhost:3001/api/fingerprint/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!fingerprintResponse.ok) {
-        console.log('Error en fingerprint response:', fingerprintResponse.status);
-        scanInProgressRef.current = false;
-        return;
-      }
-
-      const fingerprintData = await fingerprintResponse.json();
-      
-      if (fingerprintData.error) {
-        console.log('Error del servidor:', fingerprintData.error);
-        scanInProgressRef.current = false;
-        return;
-      }
-
-      const fingerprint = fingerprintData.fingerprint || fingerprintData.template;
-
-      if (!fingerprint) {
-        console.log('No fingerprint data received');
-        scanInProgressRef.current = false;
-        return;
-      }
-
-      console.log('Huella detectada:', fingerprint.substring(0, 20) + '...');
-
-      // Buscar miembro con esta huella
-      const memberResponse = await fetch(
-        `http://localhost:3001/api/members/by-fingerprint?fingerprint=${encodeURIComponent(fingerprint)}`,
-        { method: 'GET' }
-      );
-
-      if (memberResponse.ok) {
-        const memberData = await memberResponse.json();
-        if (memberData.success && memberData.member) {
-          console.log('Miembro encontrado:', memberData.member.name);
-          onMemberDetected(memberData.member);
-          isActivatedRef.current = false; // Resetear después de detectar
-        }
-      } else {
-        console.log('Member search response status:', memberResponse.status);
-        const errorText = await memberResponse.text();
-        console.log('Error response:', errorText);
-      }
-    } catch (err) {
-      console.error('Error durante escaneo:', err.message);
-    } finally {
-      scanInProgressRef.current = false;
-    }
-  };
-
-  // Exponer función globalmente para activar manualmente si es necesario
   useEffect(() => {
-    window.triggerFingerprintScan = () => {
-      isActivatedRef.current = true;
-      attemptFingerprintScan();
+    stoppedRef.current = false;
+    let timer = null;
+
+    const attempt = async () => {
+      if (stoppedRef.current || scanInProgressRef.current) return;
+      scanInProgressRef.current = true;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const response = await fetch(
+          'http://localhost:3001/api/fingerprint/auto-identify?maxWait=15000',
+          { signal: controller.signal }
+        );
+
+        if (!response.ok || !response.body) {
+          console.log('Error en auto-identify:', response.status);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          let nl;
+          while ((nl = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, nl).trim();
+            buffer = buffer.slice(nl + 1);
+            if (!line) continue;
+
+            let evt;
+            try {
+              evt = JSON.parse(line);
+            } catch (_) {
+              continue;
+            }
+            if (evt.phase !== 'result') continue;
+
+            if (evt.success && evt.member) {
+              const now = Date.now();
+              const last = lastDetectedRef.current;
+              if (last.id === evt.member.id && now - last.at < 6000) continue;
+              lastDetectedRef.current = { id: evt.member.id, at: now };
+              console.log('Miembro detectado:', evt.member.name);
+              onDetectedRef.current(evt.member);
+            } else if (evt.error && evt.fingerPresent) {
+              console.log('Huella no identificada:', evt.error);
+            }
+          }
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Error durante escaneo:', err.message);
+        }
+      } finally {
+        scanInProgressRef.current = false;
+      }
+    };
+
+    const loop = () => {
+      if (stoppedRef.current) return;
+      attempt().finally(() => {
+        if (stoppedRef.current) return;
+        timer = setTimeout(loop, 600);
+      });
+    };
+
+    loop();
+
+    return () => {
+      stoppedRef.current = true;
+      if (timer) clearTimeout(timer);
+      if (abortRef.current) abortRef.current.abort();
     };
   }, []);
 
-  return null; // Este componente no renderiza UI
+  return null;
 };
 
 export default FingerprintReader;
